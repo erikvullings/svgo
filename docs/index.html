@@ -1,0 +1,1147 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced SVG Optimizer</title>
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="manifest" href="/site.webmanifest">
+  <link rel="shortcut icon" href="/favicon.ico">
+  <meta name="msapplication-TileColor" content="#ffffff">
+  <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+  <meta name="theme-color" content="#ffffff">
+  <meta property="og:title" content="Advanced SVG Optimizer">
+  <meta property="og:description" content="Optimize and transform your SVG files for better performance and rendering.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://www.your-app-domain.com/">
+  <meta property="og:image" content="https://www.your-app-domain.com/android-chrome-512x512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="Advanced SVG Optimizer Logo">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:site" content="@yourtwitterhandle">
+  <meta name="twitter:creator" content="@yourtwitterhandle">
+  <meta name="twitter:title" content="Advanced SVG Optimizer">
+  <meta name="twitter:description"
+    content="Optimize and transform your SVG files for better performance and rendering.">
+  <meta name="twitter:image" content="https://www.your-app-domain.com/android-chrome-512x512.png">
+  <meta name="description"
+    content="An advanced online tool to optimize, clean, and resize SVG files, improving performance and compatibility.">
+
+  <script src="https://cdn.jsdelivr.net/npm/mithril@2.3.0/mithril.min.js"></script>
+  <!-- <script type="module" src="https://cdn.jsdelivr.net/npm/svgo@3.3.2/dist/svgo.browser.min.js"></script> -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .header {
+      background: #2a2a2a;
+      padding: 1rem;
+      border-bottom: 1px solid #404040;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      color: #4fc3f7;
+    }
+
+    .stats {
+      display: flex;
+      gap: 2rem;
+      font-size: 0.9rem;
+    }
+
+    .stat {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-label {
+      color: #888;
+      font-size: 0.8rem;
+    }
+
+    .stat-value {
+      font-weight: 600;
+      color: #4fc3f7;
+    }
+
+    .controls {
+      background: #2a2a2a;
+      padding: 1rem;
+      border-bottom: 1px solid #404040;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+      max-height: 120px;
+      overflow-y: auto;
+    }
+
+    .file-input {
+      position: relative;
+      display: inline-block;
+    }
+
+    .file-input input[type=file] {
+      position: absolute;
+      left: -9999px;
+    }
+
+    .file-button {
+      background: #4fc3f7;
+      color: #1a1a1a;
+      border: none;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.2s;
+    }
+
+    .file-button:hover {
+      background: #29b6f6;
+    }
+
+    .option-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      align-items: center;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      accent-color: #4fc3f7;
+    }
+
+    .number-input {
+      width: 60px;
+      background: #404040;
+      border: 1px solid #555;
+      color: #e0e0e0;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .dimension-input {
+      width: 80px;
+      background: #404040;
+      border: 1px solid #555;
+      color: #e0e0e0;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+    }
+
+    .main-content {
+      display: flex;
+      height: calc(100vh - 200px);
+    }
+
+    .editor-panel,
+    .preview-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .panel-header {
+      background: #333;
+      padding: 0.5rem 1rem;
+      font-weight: 600;
+      border-bottom: 1px solid #404040;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .download-btn {
+      background: #4caf50;
+      color: white;
+      border: none;
+      padding: 0.25rem 0.75rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .download-btn:hover {
+      background: #45a049;
+    }
+
+    .editor-container {
+      flex: 1;
+      position: relative;
+    }
+
+    .preview-container {
+      flex: 1;
+      padding: 1rem;
+      overflow: auto;
+      background: #2a2a2a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .svg-preview {
+      max-width: 100%;
+      max-height: 100%;
+      border: 1px solid #404040;
+      background: white;
+    }
+
+    .error {
+      color: #f44336;
+      padding: 1rem;
+      background: #330000;
+      border: 1px solid #660000;
+      border-radius: 4px;
+      margin: 1rem;
+    }
+
+    .drop-zone {
+      border: 2px dashed #4fc3f7;
+      border-radius: 8px;
+      padding: 2rem;
+      text-align: center;
+      margin: 1rem;
+      background: #2a2a2a;
+      transition: all 0.2s;
+    }
+
+    .drop-zone.dragover {
+      background: #3a3a3a;
+      border-color: #29b6f6;
+    }
+
+    .reduction-indicator {
+      font-weight: 600;
+    }
+
+    .reduction-positive {
+      color: #4caf50;
+    }
+
+    .reduction-negative {
+      color: #f44336;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+    import SVGO from 'https://cdn.jsdelivr.net/npm/svgo@3.3.2/dist/svgo.browser.min.js';
+
+    // TypeScript-like implementation in JavaScript
+    class SVGOptimizer {
+      constructor() {
+        this.originalSvg = '';
+        this.optimizedSvg = '';
+        this.editor = null;
+        this.options = {
+          precision: 1,
+          removeTspan: true,
+          removeStyling: true,
+          removeGroups: true,
+          customWidth: 100,
+          customHeight: 100,
+          useCustomDimensions: false,
+          removeDefaultValues: true,
+          removeFontFamily: false,
+          removeFontSize: false,
+          convertSodipodiArcs: true
+        };
+        this.unitConversion = {
+          'px': 1,
+          'pt': 1.25,  // 1pt = 1.25px (1/72 inch * 96 px/inch)
+          'pc': 15,    // 1pc = 12pt = 15px
+          'mm': 3.7795275591, // 1mm = 96/25.4 px
+          'cm': 37.795275591, // 1cm = 10mm
+          'in': 96     // 1in = 96px
+        };
+      }
+
+      async initializeEditor() {
+        return new Promise((resolve) => {
+          require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
+          require(['vs/editor/editor.main'], () => {
+            // Wait for the DOM element to be available
+            const checkContainer = () => {
+              const container = document.getElementById('editor');
+              if (container) {
+                this.editor = monaco.editor.create(container, {
+                  value: this.originalSvg || '<!-- Paste your SVG code here or load a file -->',
+                  language: 'xml',
+                  theme: 'vs-dark',
+                  automaticLayout: true,
+                  minimap: { enabled: false },
+                  wordWrap: 'on'
+                });
+
+                this.editor.onDidChangeModelContent(() => {
+                  this.originalSvg = this.editor.getValue();
+                  this.optimizeSvg();
+                  m.redraw();
+                });
+
+                this.editorReady = true;
+                m.redraw(); // Trigger a redraw when editor is ready
+                resolve();
+              } else {
+                // If container not found, try again in 50ms
+                setTimeout(checkContainer, 50);
+              }
+            };
+            checkContainer();
+          });
+        });
+      }
+
+      loadFile(file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          this.originalSvg = e.target.result;
+          if (this.editor) {
+            this.editor.setValue(this.originalSvg);
+          } else {
+            // If editor isn't ready yet, reinitialize it with the content
+            setTimeout(() => {
+              if (this.editor) {
+                this.editor.setValue(this.originalSvg);
+              }
+            }, 100);
+          }
+          this.optimizeSvg();
+          m.redraw();
+        };
+        reader.readAsText(file);
+      }
+
+      roundNumbers(str, precision) {
+        return str.replace(/(\d+\.\d+)/g, (match) => {
+          const num = parseFloat(match);
+          return precision === 0 ? Math.round(num).toString() : num.toFixed(precision);
+        });
+      }
+
+      removeTspanElements(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        // Remove all tspan elements but keep their text content
+        const tspans = doc.querySelectorAll('tspan');
+        tspans.forEach(tspan => {
+          const parent = tspan.parentElement;
+          if (parent) {
+            // Move text content to parent
+            if (tspan.textContent) {
+              parent.insertBefore(doc.createTextNode(tspan.textContent), tspan);
+            }
+            parent.removeChild(tspan);
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeStyling(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        // Remove style elements
+        const styles = doc.querySelectorAll('style');
+        styles.forEach(style => style.remove());
+
+        // Remove style attributes
+        const allElements = doc.querySelectorAll('*');
+        allElements.forEach(el => {
+          el.removeAttribute('style');
+          el.removeAttribute('class');
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeGroups(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        // Flatten groups by moving their children to parent
+        const groups = Array.from(doc.querySelectorAll('g'));
+        groups.forEach(group => {
+          const parent = group.parentElement;
+          if (parent) {
+            // Move all children to parent
+            while (group.firstChild) {
+              parent.insertBefore(group.firstChild, group);
+            }
+            parent.removeChild(group);
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeDefaultValues(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        const defaultValues = {
+          'letter-spacing': ['0', 'normal'],
+          'word-spacing': ['0', 'normal'],
+          'paint-order': ['normal', 'fill stroke markers', 'markers stroke fill'],
+          'fill-opacity': ['1'],
+          'stroke-opacity': ['1'],
+          'opacity': ['1'],
+          'clip-rule': ['nonzero'],
+          'fill-rule': ['nonzero'],
+          'stroke-miterlimit': ['4'],
+          'stroke-linecap': ['butt'],
+          'stroke-linejoin': ['miter'],
+          'xml:space': ["preserve"],
+          'font-weight': ["400"],
+        };
+
+        const allElements = doc.querySelectorAll('*');
+        allElements.forEach(el => {
+          Object.keys(defaultValues).forEach(attr => {
+            const value = el.getAttribute(attr);
+            if (value && defaultValues[attr].includes(value)) {
+              el.removeAttribute(attr);
+            }
+          });
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeFontAttributes(svg, removeFontFamily, removeFontSize) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        const allElements = doc.querySelectorAll('*');
+        allElements.forEach(el => {
+          if (removeFontFamily) {
+            el.removeAttribute('font-family');
+          }
+          if (removeFontSize) {
+            el.removeAttribute('font-size');
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      convertSodipodiArcs(svg) {
+        const SODIPODI_NS = 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd';
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        const sodipodiArcs = Array.from(doc.querySelectorAll('circle, ellipse')).filter(el =>
+          el.getAttributeNS(SODIPODI_NS, 'type') === 'arc'
+        );
+
+        sodipodiArcs.forEach(arc => {
+          try {
+            const cx = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'cx') || '0');
+            const cy = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'cy') || '0');
+            let rx = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'rx') || '0');
+            let ry = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'ry') || '0');
+            let startAngle = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'start') || '0');
+            let endAngle = parseFloat(arc.getAttributeNS(SODIPODI_NS, 'end') || `${2 * Math.PI}`);
+
+            // Ensure radii are positive
+            rx = Math.abs(rx);
+            ry = Math.abs(ry);
+
+            if (rx <= 0 || ry <= 0) {
+              console.warn('Skipping sodipodi arc with zero or negative radius:', arc);
+              // Clean up sodipodi attributes even if not converted
+              Array.from(arc.attributes).forEach(attr => {
+                if (attr.name.startsWith('sodipodi:')) {
+                  arc.removeAttribute(attr.name);
+                }
+              });
+              return; // Skip this arc
+            }
+
+            // Normalize angles to be within [0, 2*PI)
+            startAngle = startAngle % (2 * Math.PI);
+            if (startAngle < 0) startAngle += 2 * Math.PI;
+            endAngle = endAngle % (2 * Math.PI);
+            if (endAngle < 0) endAngle += 2 * Math.PI;
+
+            const epsilon = 1e-6; // Small value for float comparison
+
+            // Check if it's a full circle (or very close to it) AND a perfect circle (rx == ry)
+            const isFullCircle = (Math.abs(endAngle - startAngle) < epsilon || Math.abs(Math.abs(endAngle - startAngle) - 2 * Math.PI) < epsilon);
+            const isPerfectCircle = Math.abs(rx - ry) < epsilon;
+
+            let newElement;
+
+            if (isFullCircle && isPerfectCircle) {
+              // Convert to a <circle> element for full circles
+              newElement = doc.createElementNS(SVG_NS, 'circle');
+              newElement.setAttribute('cx', cx.toString());
+              newElement.setAttribute('cy', cy.toString());
+              newElement.setAttribute('r', rx.toString()); // For a circle, rx is the radius
+            } else {
+              // Convert to a <path> element for arcs/ellipses
+              newElement = doc.createElementNS(SVG_NS, 'path');
+              const pathData = this.createEllipticalArcPath(cx, cy, rx, ry, startAngle, endAngle);
+              newElement.setAttribute('d', pathData);
+            }
+
+            // Copy all non-sodipodi attributes to the new element
+            Array.from(arc.attributes).forEach(attr => {
+              if (!attr.name.startsWith('sodipodi:') &&
+                !(newElement.tagName === 'circle' && (attr.name === 'cx' || attr.name === 'cy' || attr.name === 'r')) &&
+                !(newElement.tagName === 'path' && attr.name === 'd')) {
+                newElement.setAttribute(attr.name, attr.value);
+              }
+            });
+
+            arc.parentNode.replaceChild(newElement, arc);
+
+          } catch (error) {
+            console.warn('Failed to convert sodipodi arc:', error);
+            // Even if conversion fails, remove sodipodi attributes to clean up the original element
+            Array.from(arc.attributes).forEach(attr => {
+              if (attr.name.startsWith('sodipodi:')) {
+                arc.removeAttribute(attr.name);
+              }
+            });
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      createEllipticalArcPath(cx, cy, rx, ry, startAngle, endAngle) {
+        // Convert polar coordinates to Cartesian for start and end points
+        const startX = cx + rx * Math.cos(startAngle);
+        const startY = cy + ry * Math.sin(startAngle);
+        const endX = cx + rx * Math.cos(endAngle);
+        const endY = cy + ry * Math.sin(endAngle);
+
+        // Calculate the difference in angles to determine large-arc-flag and sweep-flag
+        // The direction for sodipodi is usually positive (counter-clockwise on standard cartesian plane,
+        // which translates to clockwise in SVG's Y-down coordinate system if sweep-flag is 1).
+        let angleDiff = endAngle - startAngle;
+        if (angleDiff < 0) {
+          angleDiff += 2 * Math.PI; // Normalize angle difference to be positive
+        }
+
+        // large-arc-flag: 1 if angleDiff > PI, 0 otherwise
+        const largeArcFlag = angleDiff > Math.PI ? 1 : 0;
+
+        // sweep-flag: 1 for clockwise (positive angle increase), 0 for counter-clockwise.
+        // Given sodipodi's positive angle convention for 'end' relative to 'start',
+        // and SVG's default y-axis going down, a positive angle increase in sodipodi
+        // usually means a clockwise sweep in SVG for the most direct path.
+        // If endAngle < startAngle initially, it implies a counter-clockwise sweep.
+        // However, after normalization, we need to be careful.
+        // The simplest way to think about it for sodipodi's convention:
+        // If endAngle is 'after' startAngle in the positive direction (0 to 2PI), sweepFlag should be 1.
+        // If endAngle is 'before' startAngle (meaning it wrapped around), sweepFlag should be 0.
+        // After normalization, if endAngle > startAngle, we assume positive sweep (clockwise for SVG).
+        // If startAngle > endAngle, it means we crossed the 0/2PI boundary, implying a "negative" sweep,
+        // which in SVG typically means `sweepFlag=0` if `endAngle` is reached by going CCW from `startAngle`.
+
+        // A simpler heuristic for sweepFlag, assuming sodipodi's 'start' and 'end' define the arc
+        // in a positive (counter-clockwise) direction on a standard mathematical coordinate system.
+        // SVG's Y-axis is inverted. So, a counter-clockwise arc in math becomes a clockwise arc in SVG
+        // if sweep-flag is 1.
+        const sweepFlag = 1; // Assuming positive angle rotation from sodipodi translates to clockwise in SVG
+
+        return `M ${startX} ${startY} A ${rx} ${ry} 0 ${largeArcFlag} ${sweepFlag} ${endX} ${endY}`;
+      }
+
+      // Helper to parse SVG length values (e.g., "10mm", "20px", "50")
+      parseSvgLength(lengthStr, defaultVal = 0) {
+        if (typeof lengthStr !== 'string') return defaultVal;
+
+        const match = lengthStr.match(/^([\d.]+)([a-z]*)$/i);
+        if (match) {
+          const value = parseFloat(match[1]);
+          const unit = match[2].toLowerCase() || 'px'; // Default to px if no unit
+
+          if (this.unitConversion[unit]) {
+            return value * this.unitConversion[unit];
+          } else {
+            // For unknown units, assume pixels if no unit is specified (e.g., "100")
+            // If a unit is specified but unknown, it's safer to default to 0 or log a warning.
+            console.warn(`Unknown SVG unit: "${unit}" in "${lengthStr}". Treating value as pixels.`);
+            return value; // Treat as pixels if unit is unrecognized
+          }
+        }
+        // If no unit or conversion factor, just try to parse as float (plain number)
+        return parseFloat(lengthStr) || defaultVal;
+      }
+
+      /**
+       * Calculates the bounding box of the SVG content within its current coordinate system.
+       * This method requires a browser environment to function correctly as it relies on
+       * SVG DOM methods like `getBBox()`.
+       * @param {string} svgString The SVG content as a string.
+       * @returns {object|null} An object with {x, y, width, height} or null if calculation fails.
+       */
+      calculateContentBBox(svgString) {
+        // Create a temporary SVG element in a detached DOM fragment or hidden div
+        const tempDiv = document.createElement('div');
+        tempDiv.style.position = 'absolute';
+        tempDiv.style.top = '-9999px';
+        tempDiv.style.left = '-9999px';
+        tempDiv.style.width = '0';
+        tempDiv.style.height = '0';
+        tempDiv.style.overflow = 'hidden';
+        document.body.appendChild(tempDiv); // Append to body to make getBBox work
+
+        tempDiv.innerHTML = svgString;
+        const svgElement = tempDiv.querySelector('svg');
+
+        if (!svgElement) {
+          document.body.removeChild(tempDiv);
+          console.error("No SVG element found in the provided string for BBox calculation.");
+          return null;
+        }
+
+        try {
+          // Get the bounding box of the entire SVG content
+          // This method accounts for all visible elements.
+          // It returns an SVGRect which has x, y, width, height.
+          // Important: This can fail or return 0,0,0,0 if the SVG is empty or has no renderable content.
+          const bbox = svgElement.getBBox();
+
+          // Check if bbox is valid (not empty)
+          if (bbox.width === 0 && bbox.height === 0 && bbox.x === 0 && bbox.y === 0) {
+            // This might indicate an empty SVG or elements with no rendering area.
+            // Fallback to parsing viewBox or width/height if getBBox is effectively zero.
+            // Or, if content is truly empty, return null.
+            console.warn("getBBox returned an empty bounding box. Trying to derive from SVG attributes.");
+            let currentWidth, currentHeight, minX = 0, minY = 0;
+            let viewBoxAttr = svgElement.getAttribute('viewBox');
+            if (viewBoxAttr) {
+              const vbParts = viewBoxAttr.split(/\s+/).map(Number);
+              minX = vbParts[0] || 0;
+              minY = vbParts[1] || 0;
+              currentWidth = vbParts[2] || 0;
+              currentHeight = vbParts[3] || 0;
+            } else {
+              currentWidth = this.parseSvgLength(svgElement.getAttribute('width'), 0);
+              currentHeight = this.parseSvgLength(svgElement.getAttribute('height'), 0);
+            }
+
+            if (currentWidth > 0 && currentHeight > 0) {
+              return { x: minX, y: minY, width: currentWidth, height: currentHeight };
+            } else {
+              console.error("Could not determine content bounding box from getBBox or SVG attributes.");
+              return null;
+            }
+          }
+
+          return {
+            x: bbox.x,
+            y: bbox.y,
+            width: bbox.width,
+            height: bbox.height
+          };
+        } catch (e) {
+          console.error("Error calculating SVG bounding box:", e);
+          return null;
+        } finally {
+          document.body.removeChild(tempDiv); // Clean up the temporary element
+        }
+      }
+
+      /**
+       * Resizes an SVG by adjusting its viewBox and width/height attributes
+       * to fit the content into a new canvas size while preserving aspect ratio.
+       * @param {string} svg The SVG content as a string.
+       * @param {number} newWidth The desired new width in pixels.
+       * @param {number} newHeight The desired new height in pixels.
+       * @returns {string} The resized SVG string.
+       */
+      resizeSvg(svg, newWidth, newHeight) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const svgElement = doc.documentElement;
+
+        if (svgElement.tagName !== 'svg') {
+          console.error("The provided SVG string does not contain an SVG element as its root.");
+          return svg;
+        }
+
+        const contentBBox = this.calculateContentBBox(svg);
+
+        let finalViewBoxX, finalViewBoxY, finalViewBoxWidth, finalViewBoxHeight;
+
+        if (contentBBox && contentBBox.width > 0 && contentBBox.height > 0) {
+          // Apply flooring to x and y, and ceiling to the max x/y to ensure full visibility
+          const x1 = Math.floor(contentBBox.x);
+          const y1 = Math.floor(contentBBox.y);
+          const x2 = Math.ceil(contentBBox.x + contentBBox.width);
+          const y2 = Math.ceil(contentBBox.y + contentBBox.height);
+
+          finalViewBoxX = x1;
+          finalViewBoxY = y1;
+          finalViewBoxWidth = x2 - x1;
+          finalViewBoxHeight = y2 - y1;
+
+          // Handle potential edge case where width/height might become 0 after rounding
+          if (finalViewBoxWidth === 0 && contentBBox.width > 0) {
+            finalViewBoxWidth = 1;
+          }
+          if (finalViewBoxHeight === 0 && contentBBox.height > 0) {
+            finalViewBoxHeight = 1;
+          }
+
+        } else {
+          console.warn("Could not calculate content BBox reliably. Falling back to existing viewBox or a default.");
+          let currentWidth, currentHeight, minX = 0, minY = 0;
+          let viewBoxAttr = svgElement.getAttribute('viewBox');
+
+          if (viewBoxAttr) {
+            const vbParts = viewBoxAttr.split(/\s+/).map(Number);
+            minX = Math.floor(vbParts[0] || 0);
+            minY = Math.floor(vbParts[1] || 0);
+            currentWidth = Math.ceil(vbParts[2] || 0); // Round up width/height
+            currentHeight = Math.ceil(vbParts[3] || 0);
+          } else {
+            minX = 0;
+            minY = 0;
+            currentWidth = Math.ceil(this.parseSvgLength(svgElement.getAttribute('width'), 100));
+            currentHeight = Math.ceil(this.parseSvgLength(svgElement.getAttribute('height'), 100));
+          }
+
+          finalViewBoxX = minX;
+          finalViewBoxY = minY;
+          finalViewBoxWidth = currentWidth;
+          finalViewBoxHeight = currentHeight;
+
+          if (finalViewBoxWidth <= 0 || finalViewBoxHeight <= 0) {
+            console.error("Failed to determine a valid content area for resizing. Using a default 0 0 100 100 viewBox.");
+            finalViewBoxX = 0;
+            finalViewBoxY = 0;
+            finalViewBoxWidth = 100;
+            finalViewBoxHeight = 100;
+          }
+        }
+
+        // Set the new width and height for the SVG element
+        svgElement.setAttribute('width', newWidth.toString());
+        svgElement.setAttribute('height', newHeight.toString());
+
+        // Set the viewBox with integer coordinates
+        svgElement.setAttribute('viewBox', `${finalViewBoxX} ${finalViewBoxY} ${finalViewBoxWidth} ${finalViewBoxHeight}`);
+
+        // preserveAspectRatio remains default 'xMidyMid meet' unless specified otherwise.
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      async optimizeSvg() {
+        if (!this.originalSvg.trim()) {
+          this.optimizedSvg = '';
+          return;
+        }
+
+        try {
+          let svg = this.originalSvg;
+
+          // Convert sodipodi arcs BEFORE SVGO to prevent removal
+          if (this.options.convertSodipodiArcs) {
+            svg = this.convertSodipodiArcs(svg);
+            console.log(svg)
+          }
+
+          // First pass with SVGO
+          const svgoResult = SVGO.optimize(svg, {
+            plugins: [
+              "preset-default",
+              'removeDoctype',
+              'removeXMLProcInst',
+              'removeComments',
+              'removeMetadata',
+              'removeTitle',
+              'removeDesc',
+              'removeUselessDefs',
+              'removeEditorsNSData',
+              'removeEmptyAttrs',
+              'removeHiddenElems',
+              'removeEmptyText',
+              'removeEmptyContainers',
+              'removeViewBox',
+              'cleanupEnableBackground',
+              'convertStyleToAttrs',
+              'convertColors',
+              'convertPathData',
+              'convertTransform',
+              'removeUnknownsAndDefaults',
+              'removeNonInheritableGroupAttrs',
+              'removeUselessStrokeAndFill',
+              'removeUnusedNS',
+              'cleanupIds',
+              'cleanupNumericValues',
+              'moveElemsAttrsToGroup',
+              'moveGroupAttrsToElems',
+              'collapseGroups',
+              'removeRasterImages',
+              'mergePaths',
+              'convertShapeToPath',
+              'sortAttrs',
+              'removeDimensions'
+            ]
+          });
+
+          svg = svgoResult.data;
+
+          // Apply custom optimizations
+          if (this.options.precision >= 0) {
+            svg = this.roundNumbers(svg, this.options.precision);
+          }
+
+          if (this.options.removeDefaultValues) {
+            svg = this.removeDefaultValues(svg);
+          }
+
+          if (this.options.removeFontFamily || this.options.removeFontSize) {
+            svg = this.removeFontAttributes(svg, this.options.removeFontFamily, this.options.removeFontSize);
+          }
+
+          if (this.options.removeTspan) {
+            svg = this.removeTspanElements(svg);
+          }
+
+          if (this.options.removeStyling) {
+            svg = this.removeStyling(svg);
+          }
+
+          if (this.options.removeGroups) {
+            svg = this.removeGroups(svg);
+          }
+
+          if (this.options.useCustomDimensions) {
+            svg = this.resizeSvg(svg, this.options.customWidth, this.options.customHeight);
+          }
+
+          this.optimizedSvg = svg;
+          if (this.editor) {
+            console.log('Updating result')
+            //this.editor.setValue(this.optimizedSvg);
+          }
+        } catch (error) {
+          console.error('Optimization error:', error);
+          this.optimizedSvg = `<!-- Error optimizing SVG: ${error.message} -->\n${this.originalSvg}`;
+        }
+      }
+
+      downloadSvg() {
+        if (!this.optimizedSvg) return;
+
+        const blob = new Blob([this.optimizedSvg], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'optimized.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
+
+      getStats() {
+        const originalSize = new Blob([this.originalSvg]).size;
+        const optimizedSize = new Blob([this.optimizedSvg]).size;
+        const reduction = originalSize - optimizedSize;
+        const reductionPercent = originalSize > 0 ? ((reduction / originalSize) * 100) : 0;
+
+        return {
+          originalSize,
+          optimizedSize,
+          reduction,
+          reductionPercent
+        };
+      }
+
+      formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        const k = 1024;
+        const sizes = ['B', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+      }
+    }
+
+    const optimizer = new SVGOptimizer();
+
+    const App = {
+      oncreate() {
+        setTimeout(() => {
+          optimizer.initializeEditor();
+        }, 100);
+
+        // Set up drag and drop
+        const dropZone = document.body;
+        dropZone.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+          dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('dragover');
+          const files = e.dataTransfer.files;
+          if (files.length > 0 && files[0].type === 'image/svg+xml') {
+            optimizer.loadFile(files[0]);
+          }
+        });
+      },
+
+      view() {
+        const stats = optimizer.getStats();
+
+        return m('div', [
+          m('div.header', [
+            m('div.title', 'Advanced SVG Optimizer'),
+            m('div.stats', [
+              m('div.stat', [
+                m('div.stat-label', 'Original'),
+                m('div.stat-value', optimizer.formatBytes(stats.originalSize))
+              ]),
+              m('div.stat', [
+                m('div.stat-label', 'Optimized'),
+                m('div.stat-value', optimizer.formatBytes(stats.optimizedSize))
+              ]),
+              m('div.stat', [
+                m('div.stat-label', 'Reduction'),
+                m('div.stat-value', {
+                  class: stats.reduction > 0 ? 'reduction-positive' : stats.reduction < 0 ? 'reduction-negative' : ''
+                }, `${stats.reduction > 0 ? '-' : ''}${optimizer.formatBytes(Math.abs(stats.reduction))} (${stats.reductionPercent.toFixed(1)}%)`)
+              ])
+            ])
+          ]),
+
+          m('div.controls', [
+            m('div.file-input', [
+              m('input[type=file]', {
+                id: 'file-input',
+                accept: '.svg,image/svg+xml',
+                onchange: (e) => {
+                  if (e.target.files[0]) {
+                    optimizer.loadFile(e.target.files[0]);
+                  }
+                }
+              }),
+              m('label.file-button', { for: 'file-input' }, 'Load SVG File')
+            ]),
+
+            m('div.option-group', [
+              m('div.checkbox-group', [
+                m('label', 'Precision:'),
+                m('input.number-input[type=number]', {
+                  value: optimizer.options.precision,
+                  min: 0,
+                  max: 5,
+                  onchange: (e) => {
+                    optimizer.options.precision = parseInt(e.target.value);
+                    optimizer.optimizeSvg();
+                  }
+                })
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'convert-sodipodi',
+                  checked: optimizer.options.convertSodipodiArcs,
+                  onchange: (e) => {
+                    optimizer.options.convertSodipodiArcs = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'convert-sodipodi' }, 'Convert sodipodi arcs')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-defaults',
+                  checked: optimizer.options.removeDefaultValues,
+                  onchange: (e) => {
+                    optimizer.options.removeDefaultValues = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-defaults' }, 'Remove default values')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-font-family',
+                  checked: optimizer.options.removeFontFamily,
+                  onchange: (e) => {
+                    optimizer.options.removeFontFamily = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-font-family' }, 'Remove font-family')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-font-size',
+                  checked: optimizer.options.removeFontSize,
+                  onchange: (e) => {
+                    optimizer.options.removeFontSize = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-font-size' }, 'Remove font-size')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-tspan',
+                  checked: optimizer.options.removeTspan,
+                  onchange: (e) => {
+                    optimizer.options.removeTspan = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-tspan' }, 'Remove tspan')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-styling',
+                  checked: optimizer.options.removeStyling,
+                  onchange: (e) => {
+                    optimizer.options.removeStyling = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-styling' }, 'Remove styling')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'remove-groups',
+                  checked: optimizer.options.removeGroups,
+                  onchange: (e) => {
+                    optimizer.options.removeGroups = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'remove-groups' }, 'Remove groups')
+              ]),
+
+              m('div.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'custom-dimensions',
+                  checked: optimizer.options.useCustomDimensions,
+                  onchange: (e) => {
+                    optimizer.options.useCustomDimensions = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'custom-dimensions' }, 'Custom size:'),
+                m('input.dimension-input[type=number]', {
+                  value: optimizer.options.customWidth,
+                  placeholder: 'Width',
+                  onchange: (e) => {
+                    optimizer.options.customWidth = parseInt(e.target.value);
+                    if (optimizer.options.useCustomDimensions) {
+                      optimizer.optimizeSvg();
+                    }
+                  }
+                }),
+                m('span', '×'),
+                m('input.dimension-input[type=number]', {
+                  value: optimizer.options.customHeight,
+                  placeholder: 'Height',
+                  onchange: (e) => {
+                    optimizer.options.customHeight = parseInt(e.target.value);
+                    if (optimizer.options.useCustomDimensions) {
+                      optimizer.optimizeSvg();
+                    }
+                  }
+                })
+              ])
+            ])
+          ]),
+
+          m('div.main-content', [
+            m('div.editor-panel', [
+              m('div.panel-header', [
+                m('span', 'Source SVG'),
+                optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null
+              ]),
+              m('div.editor-container', [
+                optimizer.editorReady || optimizer.originalSvg ?
+                  m('div#editor', { style: 'height: 100%' }) :
+                  m('div.drop-zone', [
+                    m('p', '📁 Drop an SVG file here or click "Load SVG File"'),
+                    m('p', { style: 'margin-top: 0.5rem; font-size: 0.9rem; color: #888' }, 'You can also paste SVG code directly into the editor')
+                  ])
+              ])
+            ]),
+
+            m('div.preview-panel', [
+              m('div.panel-header', [
+                m('span', 'Optimized SVG'),
+                optimizer.optimizedSvg ? m('button.download-btn', {
+                  onclick: () => optimizer.downloadSvg()
+                }, 'Download') : null
+              ]),
+              m('div.preview-container', [
+                optimizer.optimizedSvg ?
+                  m.trust(optimizer.optimizedSvg) :
+                  m('div', { style: 'color: #888; text-align: center' }, 'Preview will appear here')
+              ])
+            ])
+          ])
+        ]);
+      }
+    };
+
+    m.mount(document.getElementById('app'), App);
+  </script>
+</body>
+
+</html>
