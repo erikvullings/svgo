@@ -271,6 +271,18 @@
     .reduction-negative {
       color: #f44336;
     }
+
+    .svg-preview {
+      transform-origin: center center;
+      transition: transform 0.2s ease-in-out;
+    }
+
+    .main-content {
+      display: flex;
+      height: calc(100vh - 200px);
+      resize: horizontal;
+      overflow: auto;
+    }
   </style>
 </head>
 
@@ -928,6 +940,22 @@
 
     const optimizer = new SVGOptimizer();
 
+    let svgScale = 1;
+    function zoomSvg(factor) {
+      svgScale *= factor;
+      const svg = document.querySelector(".preview-container svg");
+      if (svg) {
+        svg.style.transform = `scale(${svgScale})`;
+      }
+    }
+    function resetZoom() {
+      svgScale = 1;
+      const svg = document.querySelector(".preview-container svg");
+      if (svg) {
+        svg.style.transform = `scale(1)`;
+      }
+    }
+
     const App = {
       oncreate() {
         setTimeout(() => {
@@ -1147,11 +1175,17 @@
             ]),
 
             m('.preview-panel', [
-              m('.panel-header', [
-                m('span', 'Optimized SVG'),
-                optimizer.optimizedSvg ? m('button.download-btn', {
+              m(".panel-header", [
+                m("span", "Optimized SVG"),
+                optimizer.optimizedSvg && m('div', { style: 'display:flex; gap:0.5rem; align-items:center;' }, [
+                  m('button', { onclick: () => zoomSvg(1.2) }, '+'),
+                  m('button', { onclick: () => zoomSvg(0.8) }, '-'),
+                  m('button', { onclick: () => resetZoom() }, 'Reset'),
+                ]),
+
+                optimizer.optimizedSvg && m('button.download-btn', {
                   onclick: () => optimizer.downloadSvg()
-                }, 'Download') : null
+                }, 'Download')
               ]),
               m('.preview-container', [
                 optimizer.optimizedSvg ?
