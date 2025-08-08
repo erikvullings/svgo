@@ -8,7 +8,7 @@ An advanced online tool to optimize, clean, and resize SVG files directly in you
 
 This application is designed to run as a standalone web app directly from a GitHub Pages deployment.
 
-[**Visit the Live Demo Here**](https://your-username.github.io/your-repo-name/docs/) ## ✨ Features
+[**Visit the Live Demo Here**](https://erikvullings.github.io/svgo) ## ✨ Features
 
 * **Comprehensive SVG Optimization:** Utilizes a highly configurable SVGO core for standard optimizations like removing useless elements, comments, metadata, and cleaning up numeric values.
 * **Custom Transformations:**
@@ -63,8 +63,9 @@ This project is built with:
 
 To run locally:
 
-1.  Clone this repository: `git clone https://github.com/your-username/your-repo-name.git` 2.  Navigate to the `docs` folder: `cd your-repo-name/docs`
-3.  Open `index.html` in your web browser. (You might need a local server for drag-and-drop or file loading to work correctly, e.g., `python3 -m http.server` or `npx serve`).
+1. Clone this repository: `git clone https://github.com/your-username/your-repo-name.git` 
+2. Navigate to the `docs` folder: `cd your-repo-name/docs`
+3. Open `index.html` in your web browser. (You might need a local server for drag-and-drop or file loading to work correctly, e.g., `python3 -m http.server` or `npx serve`).
 
 ## 🤝 Contributing
 
@@ -72,6 +73,4 @@ Contributions are welcome! If you find a bug or have a feature request, please o
 
 ## 📄 License
 
-This project is open-source and available under the [MIT License](LICENSE). ---
-
-**Note:** Remember to replace the placeholder URLs and social media handles (`https://your-app-domain.com/`, `https://your-username.github.io/your-repo-name/docs/`, `https://github.com/your-username/your-repo-name.git`, `@yourtwitterhandle`) with your actual project details before using this `README.md` file.
+This project is open-source and available under the [MIT License](LICENSE).
