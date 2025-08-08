@@ -283,6 +283,16 @@
       resize: horizontal;
       overflow: auto;
     }
+
+    #dragbar {
+      z-index: 10;
+    }
+
+    #left-panel,
+    #right-panel {
+      overflow: hidden;
+      height: 100%;
+    }
   </style>
 </head>
 
@@ -867,7 +877,16 @@
 
           // Apply custom optimizations
           if (this.options.precision >= 0) {
-            svg = this.roundNumbers(svg, this.options.precision);
+
+            const p = this.options.precision;
+            const roundingPct = this.options.roundingPercent ?? 100;
+            if (roundingPct < 100) {
+              const adjustPrecision = Math.max(0, Math.floor(p * (roundingPct / 100)));
+              svg = this.roundNumbers(svg, adjustPrecision);
+            } else {
+              svg = this.roundNumbers(svg, p);
+            }
+
           }
 
           if (this.options.removeDefaultValues) {
@@ -939,22 +958,6 @@
     }
 
     const optimizer = new SVGOptimizer();
-
-    let svgScale = 1;
-    function zoomSvg(factor) {
-      svgScale *= factor;
-      const svg = document.querySelector(".preview-container svg");
-      if (svg) {
-        svg.style.transform = `scale(${svgScale})`;
-      }
-    }
-    function resetZoom() {
-      svgScale = 1;
-      const svg = document.querySelector(".preview-container svg");
-      if (svg) {
-        svg.style.transform = `scale(1)`;
-      }
-    }
 
     const App = {
       oncreate() {
@@ -1036,7 +1039,19 @@
                     optimizer.options.precision = parseInt(e.target.value);
                     optimizer.optimizeSvg();
                   }
-                })
+                }),
+                m('.checkbox-group[title="Rounding percentage: 0 = no rounding, 100 = max rounding"]', [
+                  m('label', 'Rounding %:'),
+                  m('input.number-input[type=number]', {
+                    value: optimizer.options.roundingPercent || 100,
+                    min: 0,
+                    max: 100,
+                    onchange: (e) => {
+                      optimizer.options.roundingPercent = parseInt(e.target.value);
+                      optimizer.optimizeSvg();
+                    }
+                  })
+                ]),
               ]),
 
               m('.checkbox-group', [
@@ -1158,23 +1173,50 @@
             ])
           ]),
 
-          m('.main-content', [
-            m('.editor-panel', [
-              m('.panel-header', [
-                m('span', 'Source SVG'),
-                optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null
-              ]),
-              m('.editor-container', [
-                optimizer.editorReady || optimizer.originalSvg ?
-                  m('div#editor', { style: 'height: 100%' }) :
-                  m('.drop-zone', [
-                    m('p', '📁 Drop an SVG file here or click "Load SVG File"'),
-                    m('p', { style: 'margin-top: 0.5rem; font-size: 0.9rem; color: #888' }, 'You can also paste SVG code directly into the editor')
-                  ])
-              ])
-            ]),
 
-            m('.preview-panel', [
+          m('.main-content', {
+            oncreate: () => {
+              const splitter = document.getElementById('dragbar');
+              const left = document.getElementById('left-panel');
+              const right = document.getElementById('right-panel');
+              splitter.onmousedown = function (e) {
+                e.preventDefault();
+                document.onmousemove = function (e) {
+                  let percent = (e.clientX / (window.innerWidth)) * 100;
+                  let percentSplitter = 6 / window.innerWidth * 100;
+                  percent = Math.max(10, Math.min(90, percent));
+                  left.style.flex = `0 0 ${percent}%`;
+                  right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
+                };
+                document.onmouseup = function () {
+                  document.onmousemove = null;
+                  document.onmouseup = null;
+                };
+              };
+            }
+          }, [
+            m('.editor-panel#left-panel', [
+
+              m('.editor-panel', [
+                m('.panel-header', [
+                  m('span', 'Source SVG'),
+                  optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null
+                ]),
+                m('.editor-container', [
+                  optimizer.editorReady || optimizer.originalSvg ?
+                    m('div#editor', { style: 'height: 100%' }) :
+                    m('.drop-zone', [
+                      m('p', '📁 Drop an SVG file here or click "Load SVG File"'),
+                      m('p', { style: 'margin-top: 0.5rem; font-size: 0.9rem; color: #888' }, 'You can also paste SVG code directly into the editor')
+                    ])
+                ])
+              ]),
+
+
+            ]),
+            m('div#dragbar', { style: 'width: 6px; cursor: col-resize; background: #666;' }),
+            m('.preview-panel#right-panel', [
+
               m(".panel-header", [
                 m("span", "Optimized SVG"),
                 optimizer.optimizedSvg && m('div', { style: 'display:flex; gap:0.5rem; align-items:center;' }, [
@@ -1198,7 +1240,109 @@
       }
     };
 
+
+    let svgScale = 1;
+    let panX = 0;
+    let panY = 0;
+    let isPanning = false;
+    let startX = 0;
+    let startY = 0;
+
+    function applyTransform() {
+      const svg = document.querySelector(".preview-container svg");
+      if (svg) {
+        svg.style.transform = `translate(${panX}px, ${panY}px) scale(${svgScale})`;
+        svg.style.transformOrigin = "0 0";
+      }
+    }
+
+    function zoomSvg(factor) {
+      svgScale *= factor;
+      applyTransform();
+    }
+
+    function resetZoom() {
+      svgScale = 1;
+      panX = 0;
+      panY = 0;
+      applyTransform();
+    }
+
+    function setupPanEvents() {
+      const container = document.querySelector('.preview-container');
+      if (!container) return;
+
+      container.addEventListener('mousedown', (e) => {
+        isPanning = true;
+        startX = e.clientX - panX;
+        startY = e.clientY - panY;
+        container.style.cursor = 'grabbing';
+      });
+
+      container.addEventListener('mousemove', (e) => {
+        if (!isPanning) return;
+        panX = e.clientX - startX;
+        panY = e.clientY - startY;
+        applyTransform();
+      });
+
+      container.addEventListener('mouseup', () => {
+        isPanning = false;
+        container.style.cursor = 'default';
+      });
+
+      container.addEventListener('mouseleave', () => {
+        isPanning = false;
+        container.style.cursor = 'default';
+      });
+
+      container.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        svgScale *= delta;
+        applyTransform();
+      }, { passive: false });
+    }
+
+
     m.mount(document.getElementById('app'), App);
+    setupPanEvents();
+
+    document.addEventListener('keydown', (e) => {
+      const step = 20;
+      const zoomStep = 1.1;
+      switch (e.key) {
+        case 'ArrowUp':
+          panY -= step;
+          break;
+        case 'ArrowDown':
+          panY += step;
+          break;
+        case 'ArrowLeft':
+          panX -= step;
+          break;
+        case 'ArrowRight':
+          panX += step;
+          break;
+        case '+':
+        case '=':
+          svgScale *= zoomStep;
+          break;
+        case '-':
+        case '_':
+          svgScale /= zoomStep;
+          break;
+        case '0':
+          svgScale = 1;
+          panX = 0;
+          panY = 0;
+          break;
+        default:
+          return;
+      }
+      applyTransform();
+    });
+
   </script>
 </body>
 
