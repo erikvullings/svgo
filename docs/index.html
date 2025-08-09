@@ -398,7 +398,47 @@
         // Updated regex to also match numbers starting with a decimal point (e.g., .1234)
         return str.replace(/(-?\d*\.\d+)/g, (match) => {
           const num = parseFloat(match);
-          return precision === 0 ? Math.round(num).toString() : num.toFixed(precision);
+          const absNum = Math.abs(num);
+          let dynamicPrecision = precision;
+          
+          // Dynamic precision based on number magnitude
+          if (absNum >= 100) {
+            // Large numbers (≥100): can be rounded more aggressively
+            dynamicPrecision = Math.max(0, precision - 2);
+          } else if (absNum >= 10) {
+            // Medium numbers (10-99): round slightly more aggressively
+            dynamicPrecision = Math.max(0, precision - 1);
+          } else if (absNum >= 1) {
+            // Numbers 1-9: use normal precision
+            dynamicPrecision = precision;
+          } else {
+            // Small numbers (<1): preserve more precision to avoid visual impact
+            dynamicPrecision = Math.min(precision + 1, 5);
+          }
+          
+          let rounded;
+          
+          if (dynamicPrecision === 0) {
+            rounded = Math.round(num);
+          } else {
+            rounded = parseFloat(num.toFixed(dynamicPrecision));
+            
+            // If rounding would make the number zero, try with one more decimal place
+            if (rounded === 0 && num !== 0) {
+              rounded = parseFloat(num.toFixed(dynamicPrecision + 1));
+            }
+          }
+          
+          let result = rounded.toString();
+          
+          // Remove leading zero for numbers between -1 and 1 (e.g., 0.5 -> .5, -0.3 -> -.3)
+          if (result.startsWith('0.')) {
+            result = result.substring(1);
+          } else if (result.startsWith('-0.')) {
+            result = '-' + result.substring(2);
+          }
+          
+          return result;
         });
       }
 
@@ -506,6 +546,149 @@
             el.removeAttribute('font-size');
           }
         });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      groupTextByAttributes(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+
+        // Find all text elements
+        const textElements = Array.from(doc.querySelectorAll('text, tspan'));
+        
+        if (textElements.length < 2) return svg; // Need at least 2 elements to group
+
+        // Attributes we want to group by
+        const groupableAttributes = ['font-family', 'font-size', 'text-anchor', 'font-weight', 'font-style'];
+
+        // Group text elements by their attribute signature
+        const groups = new Map();
+        
+        textElements.forEach(el => {
+          const attributes = {};
+          let hasGroupableAttrs = false;
+
+          groupableAttributes.forEach(attr => {
+            const value = el.getAttribute(attr);
+            if (value) {
+              attributes[attr] = value;
+              hasGroupableAttrs = true;
+            }
+          });
+
+          // Only group elements that have at least one groupable attribute
+          if (hasGroupableAttrs) {
+            const signature = JSON.stringify(attributes);
+            if (!groups.has(signature)) {
+              groups.set(signature, { attributes, elements: [] });
+            }
+            groups.get(signature).elements.push(el);
+          }
+        });
+
+        // Process groups with 2 or more elements
+        groups.forEach(({ attributes, elements }) => {
+          if (elements.length >= 2) {
+            // Create a group element
+            const group = doc.createElementNS(SVG_NS, 'g');
+            
+            // Add common attributes to the group
+            Object.entries(attributes).forEach(([attr, value]) => {
+              group.setAttribute(attr, value);
+            });
+
+            // Find a common parent for all elements in this group
+            let commonParent = elements[0].parentNode;
+            
+            // Simple approach: use the parent of the first element
+            // Insert the group before the first element
+            commonParent.insertBefore(group, elements[0]);
+
+            // Move elements to the group and remove their common attributes
+            elements.forEach(el => {
+              // Remove the common attributes from the element
+              Object.keys(attributes).forEach(attr => {
+                el.removeAttribute(attr);
+              });
+              
+              // Move element to the group
+              group.appendChild(el);
+            });
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeStrokeFromText(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        // Find all text elements and remove stroke-related attributes
+        const textElements = doc.querySelectorAll('text, tspan');
+        textElements.forEach(el => {
+          el.removeAttribute('stroke');
+          el.removeAttribute('stroke-width');
+          el.removeAttribute('stroke-opacity');
+          el.removeAttribute('stroke-dasharray');
+          el.removeAttribute('stroke-dashoffset');
+          el.removeAttribute('stroke-linecap');
+          el.removeAttribute('stroke-linejoin');
+          el.removeAttribute('stroke-miterlimit');
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      removeDuplicateDefs(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        const defsElement = doc.querySelector('defs');
+        if (!defsElement) return svg;
+
+        // Get all children of defs
+        const defChildren = Array.from(defsElement.children);
+        const defsByContent = new Map();
+        const idMappings = new Map();
+
+        defChildren.forEach(child => {
+          // Create a normalized string representation of the element (without id)
+          const childClone = child.cloneNode(true);
+          childClone.removeAttribute('id');
+          const normalized = new XMLSerializer().serializeToString(childClone);
+
+          const originalId = child.getAttribute('id');
+          
+          if (defsByContent.has(normalized)) {
+            // This is a duplicate - map its ID to the first occurrence's ID
+            const firstId = defsByContent.get(normalized);
+            idMappings.set(originalId, firstId);
+            
+            // Remove the duplicate element
+            child.remove();
+          } else {
+            // This is the first occurrence
+            defsByContent.set(normalized, originalId);
+          }
+        });
+
+        // Update all references in the document
+        if (idMappings.size > 0) {
+          const svgString = new XMLSerializer().serializeToString(doc);
+          let updatedSvg = svgString;
+          
+          idMappings.forEach((newId, oldId) => {
+            // Replace url(#oldId) with url(#newId)
+            updatedSvg = updatedSvg.replace(new RegExp(`url\\(#${oldId}\\)`, 'g'), `url(#${newId})`);
+            // Replace #oldId with #newId in other contexts
+            updatedSvg = updatedSvg.replace(new RegExp(`#${oldId}`, 'g'), `#${newId}`);
+          });
+
+          return updatedSvg;
+        }
 
         return new XMLSerializer().serializeToString(doc);
       }
@@ -877,16 +1060,7 @@
 
           // Apply custom optimizations
           if (this.options.precision >= 0) {
-
-            const p = this.options.precision;
-            const roundingPct = this.options.roundingPercent ?? 100;
-            if (roundingPct < 100) {
-              const adjustPrecision = Math.max(0, Math.floor(p * (roundingPct / 100)));
-              svg = this.roundNumbers(svg, adjustPrecision);
-            } else {
-              svg = this.roundNumbers(svg, p);
-            }
-
+            svg = this.roundNumbers(svg, this.options.precision);
           }
 
           if (this.options.removeDefaultValues) {
@@ -908,6 +1082,15 @@
           if (this.options.removeGroups) {
             svg = this.removeGroups(svg);
           }
+
+          // Remove duplicate definitions
+          svg = this.removeDuplicateDefs(svg);
+
+          // Remove stroke attributes from text elements
+          svg = this.removeStrokeFromText(svg);
+
+          // Group text elements by common attributes
+          svg = this.groupTextByAttributes(svg);
 
           if (this.options.useCustomDimensions) {
             svg = this.resizeSvg(svg, this.options.customWidth, this.options.customHeight);
@@ -1040,18 +1223,6 @@
                     optimizer.optimizeSvg();
                   }
                 }),
-                m('.checkbox-group[title="Rounding percentage: 0 = no rounding, 100 = max rounding"]', [
-                  m('label', 'Rounding %:'),
-                  m('input.number-input[type=number]', {
-                    value: optimizer.options.roundingPercent || 100,
-                    min: 0,
-                    max: 100,
-                    onchange: (e) => {
-                      optimizer.options.roundingPercent = parseInt(e.target.value);
-                      optimizer.optimizeSvg();
-                    }
-                  })
-                ]),
               ]),
 
               m('.checkbox-group', [

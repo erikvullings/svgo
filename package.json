@@ -1,0 +1,32 @@
+{
+  "name": "svgo",
+  "version": "1.0.0",
+  "description": "A single-page webapp to reduce the size of SVG files.",
+  "keywords": [
+    "svg",
+    "optimize",
+    "compress",
+    "svgo"
+  ],
+  "homepage": "https://github.com/erikvullings/svgo#readme",
+  "bugs": {
+    "url": "https://github.com/erikvullings/svgo/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/erikvullings/svgo.git"
+  },
+  "license": "MIT",
+  "author": "Erik Vullings <erik.vullings@gmail.com>",
+  "type": "commonjs",
+  "main": "docs/index.html",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "start": "cd docs && http-server ."
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
