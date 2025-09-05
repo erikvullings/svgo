@@ -154,7 +154,8 @@
       gap: 0.5rem;
     }
 
-    .checkbox-group input[type="checkbox"] {
+    .checkbox-group input[type="checkbox"],
+    .checkbox-group input[type="radio"] {
       accent-color: #4fc3f7;
     }
 
@@ -312,14 +313,16 @@
           precision: 1,
           removeTspan: true,
           removeStyling: true,
-          removeGroups: true,
+          removeGroups: false,
           customWidth: 100,
           customHeight: 100,
           useCustomDimensions: false,
           removeDefaultValues: true,
           removeFontFamily: false,
           removeFontSize: false,
-          convertSodipodiArcs: true
+          convertSodipodiArcs: true,
+          groupSimilarElements: true,
+          groupingMode: 'group' // 'group', 'remove', or 'none'
         };
         this.unitConversion = {
           'px': 1,
@@ -400,7 +403,7 @@
           const num = parseFloat(match);
           const absNum = Math.abs(num);
           let dynamicPrecision = precision;
-          
+
           // Dynamic precision based on number magnitude
           if (absNum >= 100) {
             // Large numbers (≥100): can be rounded more aggressively
@@ -415,29 +418,29 @@
             // Small numbers (<1): preserve more precision to avoid visual impact
             dynamicPrecision = Math.min(precision + 1, 5);
           }
-          
+
           let rounded;
-          
+
           if (dynamicPrecision === 0) {
             rounded = Math.round(num);
           } else {
             rounded = parseFloat(num.toFixed(dynamicPrecision));
-            
+
             // If rounding would make the number zero, try with one more decimal place
             if (rounded === 0 && num !== 0) {
               rounded = parseFloat(num.toFixed(dynamicPrecision + 1));
             }
           }
-          
+
           let result = rounded.toString();
-          
+
           // Remove leading zero for numbers between -1 and 1 (e.g., 0.5 -> .5, -0.3 -> -.3)
           if (result.startsWith('0.')) {
             result = result.substring(1);
           } else if (result.startsWith('-0.')) {
             result = '-' + result.substring(2);
           }
-          
+
           return result;
         });
       }
@@ -515,7 +518,7 @@
           'fill-rule': ['nonzero'],
           'stroke-miterlimit': ['4'],
           'stroke-linecap': ['butt'],
-          'stroke-linejoin': ['miter'],
+          'stroke-linejoin': ['miter', 'round'],
           'xml:space': ["preserve"],
           'font-weight': ["400"],
         };
@@ -528,6 +531,15 @@
               el.removeAttribute(attr);
             }
           });
+
+          // Special handling for opacity >= 0.9
+          const opacityValue = el.getAttribute('opacity');
+          if (opacityValue) {
+            const opacity = parseFloat(opacityValue);
+            if (opacity >= 0.9) {
+              el.removeAttribute('opacity');
+            }
+          }
         });
 
         return new XMLSerializer().serializeToString(doc);
@@ -557,7 +569,7 @@
 
         // Find all text elements
         const textElements = Array.from(doc.querySelectorAll('text, tspan'));
-        
+
         if (textElements.length < 2) return svg; // Need at least 2 elements to group
 
         // Attributes we want to group by
@@ -565,7 +577,7 @@
 
         // Group text elements by their attribute signature
         const groups = new Map();
-        
+
         textElements.forEach(el => {
           const attributes = {};
           let hasGroupableAttrs = false;
@@ -593,7 +605,7 @@
           if (elements.length >= 2) {
             // Create a group element
             const group = doc.createElementNS(SVG_NS, 'g');
-            
+
             // Add common attributes to the group
             Object.entries(attributes).forEach(([attr, value]) => {
               group.setAttribute(attr, value);
@@ -601,7 +613,7 @@
 
             // Find a common parent for all elements in this group
             let commonParent = elements[0].parentNode;
-            
+
             // Simple approach: use the parent of the first element
             // Insert the group before the first element
             commonParent.insertBefore(group, elements[0]);
@@ -612,10 +624,172 @@
               Object.keys(attributes).forEach(attr => {
                 el.removeAttribute(attr);
               });
-              
+
               // Move element to the group
               group.appendChild(el);
             });
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      groupSimilarElementsByType(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+
+        // Process different element types separately
+        const elementTypes = ['path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon'];
+        
+        elementTypes.forEach(tagName => {
+          const elements = Array.from(doc.querySelectorAll(tagName));
+          if (elements.length < 2) return;
+
+          // Attributes that make sense to group for this element type
+          const groupableAttributes = [
+            'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+            'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
+            'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity'
+          ];
+
+          // Count frequency of each attribute-value pair
+          const attributeValueCounts = new Map();
+          
+          elements.forEach(el => {
+            groupableAttributes.forEach(attr => {
+              const value = el.getAttribute(attr);
+              if (value) {
+                const key = `${attr}:${value}`;
+                attributeValueCounts.set(key, (attributeValueCounts.get(key) || 0) + 1);
+              }
+            });
+          });
+
+          // Find attribute-value pairs that appear in 2+ elements
+          const commonAttributeValues = new Map();
+          attributeValueCounts.forEach((count, key) => {
+            if (count >= 2) {
+              const [attr, value] = key.split(':', 2);
+              if (!commonAttributeValues.has(attr)) {
+                commonAttributeValues.set(attr, new Map());
+              }
+              commonAttributeValues.get(attr).set(value, count);
+            }
+          });
+
+          // For each attribute, find the most common value
+          const mostCommonAttributes = {};
+          commonAttributeValues.forEach((valueCounts, attr) => {
+            let maxCount = 0;
+            let mostCommonValue = null;
+            valueCounts.forEach((count, value) => {
+              if (count > maxCount) {
+                maxCount = count;
+                mostCommonValue = value;
+              }
+            });
+            if (maxCount >= 2) {
+              mostCommonAttributes[attr] = mostCommonValue;
+            }
+          });
+
+          // If we have common attributes, create a group
+          if (Object.keys(mostCommonAttributes).length > 0) {
+            // Find elements that have these common attributes (they may have additional attributes)
+            const elementsToGroup = elements.filter(el => {
+              return Object.entries(mostCommonAttributes).every(([attr, value]) => {
+                return el.getAttribute(attr) === value;
+              });
+            });
+
+            if (elementsToGroup.length >= 2) {
+              // Calculate if grouping saves space
+              const attributeCount = Object.keys(mostCommonAttributes).length;
+              const groupOverhead = 7; // <g></g> overhead
+              const avgAttrSize = 15; // Average attribute size
+              const savings = (elementsToGroup.length - 1) * attributeCount * avgAttrSize - groupOverhead;
+
+              if (savings > 0) {
+                // Create a group element
+                const group = doc.createElementNS(SVG_NS, 'g');
+                
+                // Add common attributes to the group
+                Object.entries(mostCommonAttributes).forEach(([attr, value]) => {
+                  group.setAttribute(attr, value);
+                });
+
+                // Find a common parent for all elements in this group
+                let commonParent = elementsToGroup[0].parentNode;
+                
+                // Insert the group before the first element
+                commonParent.insertBefore(group, elementsToGroup[0]);
+
+                // Move elements to the group and remove their common attributes
+                elementsToGroup.forEach(el => {
+                  // Remove only the common attributes from the element (keep unique ones)
+                  Object.keys(mostCommonAttributes).forEach(attr => {
+                    el.removeAttribute(attr);
+                  });
+                  
+                  // Move element to the group
+                  group.appendChild(el);
+                });
+              }
+            }
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      combinePaths(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const SVG_NS = 'http://www.w3.org/2000/svg';
+
+        const pathElements = Array.from(doc.querySelectorAll('path'));
+        if (pathElements.length < 2) return svg;
+
+        // Group paths by their attributes (excluding 'd')
+        const pathGroups = new Map();
+
+        pathElements.forEach(path => {
+          const attributes = {};
+          Array.from(path.attributes).forEach(attr => {
+            if (attr.name !== 'd') {
+              attributes[attr.name] = attr.value;
+            }
+          });
+
+          const signature = JSON.stringify(attributes);
+          if (!pathGroups.has(signature)) {
+            pathGroups.set(signature, { attributes, paths: [] });
+          }
+          pathGroups.get(signature).paths.push(path);
+        });
+
+        // Combine paths with identical attributes
+        pathGroups.forEach(({ attributes, paths }) => {
+          if (paths.length >= 2) {
+            // Combine d attributes
+            const combinedD = paths.map(path => path.getAttribute('d')).join(' ');
+
+            // Create new combined path
+            const combinedPath = doc.createElementNS(SVG_NS, 'path');
+            combinedPath.setAttribute('d', combinedD);
+
+            // Add other attributes
+            Object.entries(attributes).forEach(([attr, value]) => {
+              combinedPath.setAttribute(attr, value);
+            });
+
+            // Replace first path with combined path
+            const firstPath = paths[0];
+            firstPath.parentNode.insertBefore(combinedPath, firstPath);
+
+            // Remove original paths
+            paths.forEach(path => path.remove());
           }
         });
 
@@ -661,12 +835,12 @@
           const normalized = new XMLSerializer().serializeToString(childClone);
 
           const originalId = child.getAttribute('id');
-          
+
           if (defsByContent.has(normalized)) {
             // This is a duplicate - map its ID to the first occurrence's ID
             const firstId = defsByContent.get(normalized);
             idMappings.set(originalId, firstId);
-            
+
             // Remove the duplicate element
             child.remove();
           } else {
@@ -679,7 +853,7 @@
         if (idMappings.size > 0) {
           const svgString = new XMLSerializer().serializeToString(doc);
           let updatedSvg = svgString;
-          
+
           idMappings.forEach((newId, oldId) => {
             // Replace url(#oldId) with url(#newId)
             updatedSvg = updatedSvg.replace(new RegExp(`url\\(#${oldId}\\)`, 'g'), `url(#${newId})`);
@@ -1079,8 +1253,14 @@
             svg = this.removeStyling(svg);
           }
 
-          if (this.options.removeGroups) {
+          // Handle grouping based on mode
+          if (this.options.groupingMode === 'remove') {
             svg = this.removeGroups(svg);
+          } else if (this.options.groupingMode === 'group') {
+            // Group similar elements only (disable aggressive path combining for now)
+            svg = this.groupSimilarElementsByType(svg);
+            // Note: combinePaths disabled as it's too aggressive
+            // svg = this.combinePaths(svg);
           }
 
           // Remove duplicate definitions
@@ -1089,7 +1269,7 @@
           // Remove stroke attributes from text elements
           svg = this.removeStrokeFromText(svg);
 
-          // Group text elements by common attributes
+          // Group text elements by common attributes (always enabled for text optimization)
           svg = this.groupTextByAttributes(svg);
 
           if (this.options.useCustomDimensions) {
@@ -1298,15 +1478,54 @@
               ]),
 
               m('.checkbox-group', [
-                m('input[type=checkbox]', {
-                  id: 'remove-groups',
-                  checked: optimizer.options.removeGroups,
+                m('label', { style: 'margin-right: 1rem; font-weight: 600;' }, 'Grouping:'),
+                m('input[type=radio]', {
+                  id: 'grouping-none',
+                  name: 'grouping-mode',
+                  value: 'none',
+                  checked: optimizer.options.groupingMode === 'none',
                   onchange: (e) => {
-                    optimizer.options.removeGroups = e.target.checked;
-                    optimizer.optimizeSvg();
+                    if (e.target.checked) {
+                      optimizer.options.groupingMode = 'none';
+                      optimizer.options.removeGroups = false;
+                      optimizer.options.groupSimilarElements = false;
+                      optimizer.optimizeSvg();
+                    }
                   }
                 }),
-                m('label', { for: 'remove-groups' }, 'Remove groups')
+                m('label', { for: 'grouping-none', style: 'margin-right: 1rem;' }, 'None'),
+
+                m('input[type=radio]', {
+                  id: 'grouping-group',
+                  name: 'grouping-mode',
+                  value: 'group',
+                  checked: optimizer.options.groupingMode === 'group',
+                  onchange: (e) => {
+                    if (e.target.checked) {
+                      optimizer.options.groupingMode = 'group';
+                      optimizer.options.removeGroups = false;
+                      optimizer.options.groupSimilarElements = true;
+                      optimizer.optimizeSvg();
+                    }
+                  }
+                }),
+                m('label', { for: 'grouping-group', style: 'margin-right: 1rem;' }, 'Group similar'),
+
+                m('input[type=radio]', {
+                  id: 'grouping-remove',
+                  name: 'grouping-mode',
+                  value: 'remove',
+                  checked: optimizer.options.groupingMode === 'remove',
+                  onchange: (e) => {
+                    if (e.target.checked) {
+                      optimizer.options.groupingMode = 'remove';
+                      optimizer.options.removeGroups = true;
+                      optimizer.options.groupSimilarElements = false;
+                      optimizer.optimizeSvg();
+                    }
+                  }
+                }),
+                m('label', { for: 'grouping-remove' }, 'Remove groups')
               ]),
 
               m('.checkbox-group', [
