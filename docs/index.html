@@ -398,52 +398,99 @@
         }
       }
 
+      roundNumber(num, precision) {
+        const absNum = Math.abs(num);
+        let dynamicPrecision = precision;
+
+        // Dynamic precision based on number magnitude
+        if (absNum >= 100) {
+          // Large numbers (≥100): can be rounded more aggressively
+          dynamicPrecision = Math.max(0, precision - 2);
+        } else if (absNum >= 10) {
+          // Medium numbers (10-99): round slightly more aggressively
+          dynamicPrecision = Math.max(0, precision - 1);
+        } else if (absNum >= 1) {
+          // Numbers 1-9: use normal precision
+          dynamicPrecision = precision;
+        } else {
+          // Small numbers (<1): preserve more precision to avoid visual impact
+          dynamicPrecision = Math.min(precision + 1, 5);
+        }
+
+        let rounded;
+
+        if (dynamicPrecision === 0) {
+          rounded = Math.round(num);
+        } else {
+          rounded = parseFloat(num.toFixed(dynamicPrecision));
+
+          // If rounding would make the number zero, try with one more decimal place
+          if (rounded === 0 && num !== 0) {
+            rounded = parseFloat(num.toFixed(dynamicPrecision + 1));
+          }
+        }
+
+        let result = rounded.toString();
+
+        // Remove leading zero for numbers between -1 and 1 (e.g., 0.5 -> .5, -0.3 -> -.3)
+        if (result.startsWith('0.')) {
+          result = result.substring(1);
+        } else if (result.startsWith('-0.')) {
+          result = '-' + result.substring(2);
+        }
+
+        return result;
+      }
+
       roundNumbers(str, precision) {
         // Updated regex to also match numbers starting with a decimal point (e.g., .1234)
         return str.replace(/(-?\d*\.\d+)/g, (match) => {
           const num = parseFloat(match);
-          const absNum = Math.abs(num);
-          let dynamicPrecision = precision;
-
-          // Dynamic precision based on number magnitude
-          if (absNum >= 100) {
-            // Large numbers (≥100): can be rounded more aggressively
-            dynamicPrecision = Math.max(0, precision - 2);
-          } else if (absNum >= 10) {
-            // Medium numbers (10-99): round slightly more aggressively
-            dynamicPrecision = Math.max(0, precision - 1);
-          } else if (absNum >= 1) {
-            // Numbers 1-9: use normal precision
-            dynamicPrecision = precision;
-          } else {
-            // Small numbers (<1): preserve more precision to avoid visual impact
-            dynamicPrecision = Math.min(precision + 1, 5);
-          }
-
-          let rounded;
-
-          if (dynamicPrecision === 0) {
-            rounded = Math.round(num);
-          } else {
-            rounded = parseFloat(num.toFixed(dynamicPrecision));
-
-            // If rounding would make the number zero, try with one more decimal place
-            if (rounded === 0 && num !== 0) {
-              rounded = parseFloat(num.toFixed(dynamicPrecision + 1));
-            }
-          }
-
-          let result = rounded.toString();
-
-          // Remove leading zero for numbers between -1 and 1 (e.g., 0.5 -> .5, -0.3 -> -.3)
-          if (result.startsWith('0.')) {
-            result = result.substring(1);
-          } else if (result.startsWith('-0.')) {
-            result = '-' + result.substring(2);
-          }
-
-          return result;
+          return this.roundNumber(num, precision);
         });
+      }
+
+      roundPathData(pathData, precision) {
+        // SVG path data can have compressed notation where numbers are directly adjacent
+        // Examples: "10-5" means "10,-5", ".5.3" means "0.5,0.3", "1.2.3" means "1.2,0.3"
+        // This regex matches all numbers including those with compressed notation
+
+        // Match: optional minus, optional digits, optional decimal point and digits
+        // This handles: -1.23, 1.23, .23, -.23, 1, -1
+        const numberRegex = /-?(?:\d+\.?\d*|\d*\.\d+)/g;
+
+        return pathData.replace(numberRegex, (match) => {
+          const num = parseFloat(match);
+          if (isNaN(num)) return match;
+          return this.roundNumber(num, precision);
+        });
+      }
+
+      roundPathCoordinates(svg, precision) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        // Find all path elements
+        const paths = doc.querySelectorAll('path');
+        paths.forEach(path => {
+          const dAttr = path.getAttribute('d');
+          if (dAttr) {
+            const roundedPath = this.roundPathData(dAttr, precision);
+            path.setAttribute('d', roundedPath);
+          }
+        });
+
+        // Also handle polyline and polygon points
+        const polylines = doc.querySelectorAll('polyline, polygon');
+        polylines.forEach(poly => {
+          const pointsAttr = poly.getAttribute('points');
+          if (pointsAttr) {
+            const roundedPoints = this.roundPathData(pointsAttr, precision);
+            poly.setAttribute('points', roundedPoints);
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
       }
 
       removeTspanElements(svg) {
@@ -1304,6 +1351,9 @@
 
           // Apply custom optimizations
           if (this.options.precision >= 0) {
+            // First, round path coordinates with proper handling of compressed notation
+            svg = this.roundPathCoordinates(svg, this.options.precision);
+            // Then round other numeric attributes
             svg = this.roundNumbers(svg, this.options.precision);
           }
 
