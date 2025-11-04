@@ -322,7 +322,8 @@
           removeFontSize: false,
           convertSodipodiArcs: true,
           groupSimilarElements: true,
-          groupingMode: 'group' // 'group', 'remove', or 'none'
+          groupingMode: 'group', // 'group', 'remove', or 'none'
+          reorganizeElements: false
         };
         this.unitConversion = {
           'px': 1,
@@ -867,6 +868,75 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      reorganizeElementsByType(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const svgRoot = doc.documentElement;
+
+        if (svgRoot.tagName !== 'svg') {
+          console.error('Root element is not SVG');
+          return svg;
+        }
+
+        // Define the order of element types (paths first, then circles, etc.)
+        const elementOrder = ['path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon', 'text', 'g', 'use', 'image'];
+
+        // Collect all direct children of the SVG root (excluding defs, metadata, etc.)
+        const children = Array.from(svgRoot.children);
+
+        // Separate special elements that should stay at the beginning or end
+        const defsElements = [];
+        const metadataElements = [];
+        const styleElements = [];
+        const regularElements = [];
+
+        children.forEach(child => {
+          const tagName = child.tagName.toLowerCase();
+          if (tagName === 'defs') {
+            defsElements.push(child);
+          } else if (tagName === 'metadata' || tagName === 'title' || tagName === 'desc') {
+            metadataElements.push(child);
+          } else if (tagName === 'style') {
+            styleElements.push(child);
+          } else {
+            regularElements.push(child);
+          }
+        });
+
+        // Sort regular elements by type
+        regularElements.sort((a, b) => {
+          const tagA = a.tagName.toLowerCase();
+          const tagB = b.tagName.toLowerCase();
+
+          let indexA = elementOrder.indexOf(tagA);
+          let indexB = elementOrder.indexOf(tagB);
+
+          // If tag not in order list, put it at the end
+          if (indexA === -1) indexA = elementOrder.length;
+          if (indexB === -1) indexB = elementOrder.length;
+
+          // If both have the same index, maintain original order
+          if (indexA === indexB) {
+            return 0;
+          }
+
+          return indexA - indexB;
+        });
+
+        // Clear all children from SVG root
+        while (svgRoot.firstChild) {
+          svgRoot.removeChild(svgRoot.firstChild);
+        }
+
+        // Re-add in order: defs first, then metadata, then styles, then sorted regular elements
+        defsElements.forEach(el => svgRoot.appendChild(el));
+        metadataElements.forEach(el => svgRoot.appendChild(el));
+        styleElements.forEach(el => svgRoot.appendChild(el));
+        regularElements.forEach(el => svgRoot.appendChild(el));
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
       convertSodipodiArcs(svg) {
         const SODIPODI_NS = 'http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd';
         const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -1269,6 +1339,11 @@
           // Remove stroke attributes from text elements
           svg = this.removeStrokeFromText(svg);
 
+          // Reorganize elements by type if enabled
+          if (this.options.reorganizeElements) {
+            svg = this.reorganizeElementsByType(svg);
+          }
+
           // Group text elements by common attributes (always enabled for text optimization)
           svg = this.groupTextByAttributes(svg);
 
@@ -1475,6 +1550,18 @@
                   }
                 }),
                 m('label', { for: 'remove-styling' }, 'Remove styling')
+              ]),
+
+              m('.checkbox-group', [
+                m('input[type=checkbox]', {
+                  id: 'reorganize-elements',
+                  checked: optimizer.options.reorganizeElements,
+                  onchange: (e) => {
+                    optimizer.options.reorganizeElements = e.target.checked;
+                    optimizer.optimizeSvg();
+                  }
+                }),
+                m('label', { for: 'reorganize-elements' }, 'Reorganize by type')
               ]),
 
               m('.checkbox-group', [
