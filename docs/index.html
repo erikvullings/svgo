@@ -5,13 +5,13 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Advanced SVG Optimizer</title>
-  <link rel="apple-touch-icon" sizes="180x180" href="index.html">
-  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
-  <link rel="manifest" href="/site.webmanifest">
-  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+  <link rel="manifest" href="site.webmanifest">
+  <link rel="shortcut icon" href="favicon.ico">
   <meta name="msapplication-TileColor" content="#ffffff">
-  <meta name="msapplication-TileImage" content="/ms-icon-144x144.png">
+  <meta name="msapplication-TileImage" content="android-chrome-192x192.png">
   <meta name="theme-color" content="#ffffff">
   <meta property="og:title" content="Advanced SVG Optimizer">
   <meta property="og:description" content="Optimize and transform your SVG files for better performance and rendering.">
@@ -65,6 +65,14 @@
       font-size: 1.5rem;
       font-weight: 600;
       color: #4fc3f7;
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+
+    .logo {
+      height: 32px;
+      width: 32px;
     }
 
     .stats {
@@ -641,7 +649,7 @@
 
         // Process different element types separately
         const elementTypes = ['path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon'];
-        
+
         elementTypes.forEach(tagName => {
           const elements = Array.from(doc.querySelectorAll(tagName));
           if (elements.length < 2) return;
@@ -655,7 +663,7 @@
 
           // Count frequency of each attribute-value pair
           const attributeValueCounts = new Map();
-          
+
           elements.forEach(el => {
             groupableAttributes.forEach(attr => {
               const value = el.getAttribute(attr);
@@ -713,7 +721,7 @@
               if (savings > 0) {
                 // Create a group element
                 const group = doc.createElementNS(SVG_NS, 'g');
-                
+
                 // Add common attributes to the group
                 Object.entries(mostCommonAttributes).forEach(([attr, value]) => {
                   group.setAttribute(attr, value);
@@ -721,7 +729,7 @@
 
                 // Find a common parent for all elements in this group
                 let commonParent = elementsToGroup[0].parentNode;
-                
+
                 // Insert the group before the first element
                 commonParent.insertBefore(group, elementsToGroup[0]);
 
@@ -731,7 +739,7 @@
                   Object.keys(mostCommonAttributes).forEach(attr => {
                     el.removeAttribute(attr);
                   });
-                  
+
                   // Move element to the group
                   group.appendChild(el);
                 });
@@ -1354,7 +1362,10 @@
 
         return m('div', [
           m('.header', [
-            m('.title', 'Advanced SVG Optimizer'),
+            m('.title', [
+              m('img.logo', { src: 'logo.svg', alt: 'Logo' }),
+              m('span', 'Advanced SVG Optimizer')
+            ]),
             m('.stats', [
               m('.stat', [
                 m('.stat-label', 'Original'),
@@ -1593,12 +1604,10 @@
                   optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null
                 ]),
                 m('.editor-container', [
-                  optimizer.editorReady || optimizer.originalSvg ?
-                    m('div#editor', { style: 'height: 100%' }) :
-                    m('.drop-zone', [
-                      m('p', '📁 Drop an SVG file here or click "Load SVG File"'),
-                      m('p', { style: 'margin-top: 0.5rem; font-size: 0.9rem; color: #888' }, 'You can also paste SVG code directly into the editor')
-                    ])
+                  m('div#editor', {
+                    style: `height: 100%; ${!optimizer.editorReady ? 'display: none;' : ''}`
+                  }),
+                  !optimizer.editorReady ? m('div', { style: 'display: flex; align-items: center; justify-content: center; height: 100%; color: #888;' }, 'Initializing editor...') : null
                 ])
               ]),
 
