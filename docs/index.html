@@ -103,7 +103,7 @@
       border-bottom: 1px solid #404040;
       display: flex;
       flex-wrap: wrap;
-      gap: 1rem;
+      gap: 1rem 0;
       align-items: center;
       max-height: 140px;
       overflow-y: hidden;
@@ -124,7 +124,8 @@
       background: #4fc3f7;
       color: #1a1a1a;
       border: none;
-      padding: 0.5rem 1rem;
+      height: 40px;
+      padding: 0.4rem .8rem;
       margin-right: 10px;
       border-radius: 4px;
       cursor: pointer;
@@ -132,6 +133,10 @@
       transition: background 0.2s;
       font-size: 18px;
       cursor: pointer;
+    }
+
+    label.file-button {
+      padding: 0.6rem .8rem;
     }
 
     button {
@@ -1969,27 +1974,36 @@
                     optimizer.loadFile(e.target.files[0]);
                   }
                 }
-              }),
-              m('label.file-button', { for: 'file-input' }, 'Load SVG File'),
-              m('button[type=button]', {
-                disabled: optimizer.optimizedSvg && optimizer.optimizedSvg.length > 0 ? undefined : 'disabled',
-                onclick: () => optimizer.loadOptimizedFile(),
-              }, 'Load optimized SVG in editor'),
-              m('button[type=button]', {
-                disabled: !optimizer.canUndo(),
-                onclick: () => {
-                  optimizer.undo();
-                  m.redraw();
-                },
-              }, 'Undo'),
-              m('button[type=button]', {
-                disabled: !optimizer.canRedo(),
-                onclick: () => {
-                  optimizer.redo();
-                  m.redraw();
-                },
-              }, 'Redo'),
+              })
             ]),
+            m('label.file-button', { for: 'file-input' }, 'Open SVG File'),
+            m('button[type=button][title=Load optimized SVG in editor]', {
+              disabled: optimizer.optimizedSvg && optimizer.optimizedSvg.length > 0 ? undefined : 'disabled',
+              onclick: () => optimizer.loadOptimizedFile(),
+            }, 'Optimize'),
+            m('button[type=button][title=Undo]', {
+              disabled: !optimizer.canUndo(),
+              onclick: () => {
+                optimizer.undo();
+                m.redraw();
+              },
+            },
+              m('svg[fill=none][viewBox=0 0 24 24][width=20][height=20]',
+                m('path[stroke=#000][stroke-linecap=round][stroke-width=2.5][d=M21 14c-.84-1.6-2.3-3-4.1-3.9a11 11 0 0 0-5.9-.96c-3.3.41-5.6 2.6-8.2 4.6m0-4.6v4.9h4.9]')
+              ),
+
+            ),
+            m('button[type=button][title=Redo].svg', {
+              disabled: !optimizer.canRedo(),
+              onclick: () => {
+                optimizer.redo();
+                m.redraw();
+              },
+            },
+              m('svg[fill=none][viewBox=0 0 24 24][width=20][height=20]',
+                m('path[stroke=#000][stroke-linecap=round][stroke-width=2.5][d=M3.1 14c.84-1.6 2.3-3 4.1-3.9a11 11 0 0 1 5.9-.96c3.3.41 5.6 2.6 8.2 4.6m0-4.6v4.9H16]')
+              ),
+            ),
 
             m('.option-group', [
               m('.checkbox-group', [
