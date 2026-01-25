@@ -561,6 +561,8 @@
                 this.editor.onDidChangeModelContent(() => {
                   this.originalSvg = this.editor.getValue();
                   this.optimizeSvg();
+                  // Update tree doc to reflect the new optimized content
+                  this.updateTreeDoc();
                   m.redraw();
                 });
 
@@ -602,6 +604,8 @@
         if (this.optimizedSvg) {
           this.originalSvg = this.optimizedSvg;
           this.editor.setValue(this.originalSvg);
+          // Update tree doc to reflect the optimized content
+          this.updateTreeDoc();
         }
       }
 
@@ -1391,7 +1395,9 @@
           return;
         }
         const parser = new DOMParser();
-        this.options.treeDoc = parser.parseFromString(this.originalSvg, 'image/svg+xml');
+        // Use optimizedSvg for tree view if available, otherwise fall back to originalSvg
+        const svgToParse = this.optimizedSvg || this.originalSvg;
+        this.options.treeDoc = parser.parseFromString(svgToParse, 'image/svg+xml');
       }
 
       async optimizeSvg() {
@@ -1542,7 +1548,8 @@
     const TreeView = {
       view() {
         if (!optimizer.originalSvg) return m('.tree-view', 'No SVG loaded');
-        if (!optimizer.options.treeDoc) optimizer.updateTreeDoc();
+        // Always update tree doc to ensure it reflects current state
+        optimizer.updateTreeDoc();
 
         const svg = optimizer.options.treeDoc.querySelector('svg');
 
