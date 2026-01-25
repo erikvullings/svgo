@@ -473,10 +473,19 @@
       background: #555;
     }
 
-    .highlighted-preview {
-      outline: 4px solid #4fc3f7;
-      outline-offset: 4px;
+    svg .highlighted-preview {
+      border: 2px solid #4fc3f7;
       position: relative;
+      opacity: 0.6;
+      box-shadow: 0 0 0 2px #4fc3f7;
+    }
+
+    svg path.highlighted-preview {
+      stroke: #4fc3f7;
+    }
+
+    svg text.highlighted-preview {
+      fill: #4fc3f7;
     }
   </style>
 </head>
