@@ -502,6 +502,9 @@
         this.originalSvg = '';
         this.optimizedSvg = '';
         this.editor = null;
+        this.history = []; // Store history for undo/redo
+        this.historyPointer = -1; // Pointer to current position in history
+        this.maxHistory = 20; // Maximum number of history entries
         this.options = {
           precision: 1,
           removeTspan: true,
@@ -529,6 +532,12 @@
           'cm': 37.795275591, // 1cm = 10mm
           'in': 96     // 1in = 96px
         };
+        this.isRestoringHistory = false;
+        // Initialize with empty state
+        this.saveToHistory();
+
+        // Ensure we start with proper history state
+        this.historyPointer = 0;
       }
 
       async initializeEditor() {
@@ -563,10 +572,15 @@
                   this.optimizeSvg();
                   // Update tree doc to reflect the new optimized content
                   this.updateTreeDoc();
+                  this.saveToHistory(); // Save to history after editing
                   m.redraw();
                 });
 
                 this.editorReady = true;
+                // Save initial state after editor is initialized
+                if (this.history.length === 0) {
+                  this.saveToHistory();
+                }
                 m.redraw(); // Trigger a redraw when editor is ready
                 resolve();
               } else {
@@ -595,6 +609,17 @@
           }
           this.updateTreeDoc();
           this.optimizeSvg();
+
+          // Always save to history after loading
+          // First, trim history if we're not at the end
+          if (this.historyPointer < this.history.length - 1) {
+            // Trim history to current position
+            this.history = this.history.slice(0, this.historyPointer + 1);
+          }
+
+          // Save current state to history
+          this.saveToHistory();
+
           m.redraw();
         };
         reader.readAsText(file);
@@ -1541,6 +1566,77 @@
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
       }
+
+      // History management methods
+      saveToHistory() {
+        if (this.isRestoringHistory) return;
+
+        if (this.historyPointer < this.history.length - 1) {
+          this.history = this.history.slice(0, this.historyPointer + 1);
+        }
+
+        this.history.push({
+          originalSvg: this.originalSvg,
+          optimizedSvg: this.optimizedSvg,
+          options: { ...this.options }
+        });
+
+        if (this.history.length > this.maxHistory) {
+          this.history.shift();
+        }
+
+        this.historyPointer = this.history.length - 1;
+        m.redraw();
+      }
+
+
+      canUndo() {
+        return this.historyPointer > 0;
+      }
+
+      canRedo() {
+        return this.historyPointer < this.history.length - 1;
+      }
+
+      undo() {
+        if (!this.canUndo()) return;
+
+        this.isRestoringHistory = true;
+        this.historyPointer--;
+
+        const state = this.history[this.historyPointer];
+        this.originalSvg = state.originalSvg;
+        this.optimizedSvg = state.optimizedSvg;
+        this.options = { ...state.options };
+
+        if (this.editor) {
+          this.editor.setValue(this.originalSvg);
+        }
+
+        this.updateTreeDoc();
+        this.isRestoringHistory = false;
+        m.redraw();
+      }
+
+      redo() {
+        if (!this.canRedo()) return;
+
+        this.isRestoringHistory = true;
+        this.historyPointer++;
+
+        const state = this.history[this.historyPointer];
+        this.originalSvg = state.originalSvg;
+        this.optimizedSvg = state.optimizedSvg;
+        this.options = { ...state.options };
+
+        if (this.editor) {
+          this.editor.setValue(this.originalSvg);
+        }
+
+        this.updateTreeDoc();
+        this.isRestoringHistory = false;
+        m.redraw();
+      }
     }
 
     const optimizer = new SVGOptimizer();
@@ -1879,6 +1975,20 @@
                 disabled: optimizer.optimizedSvg && optimizer.optimizedSvg.length > 0 ? undefined : 'disabled',
                 onclick: () => optimizer.loadOptimizedFile(),
               }, 'Load optimized SVG in editor'),
+              m('button[type=button]', {
+                disabled: !optimizer.canUndo(),
+                onclick: () => {
+                  optimizer.undo();
+                  m.redraw();
+                },
+              }, 'Undo'),
+              m('button[type=button]', {
+                disabled: !optimizer.canRedo(),
+                onclick: () => {
+                  optimizer.redo();
+                  m.redraw();
+                },
+              }, 'Redo'),
             ]),
 
             m('.option-group', [
@@ -1891,6 +2001,7 @@
                   onchange: (e) => {
                     optimizer.options.precision = parseInt(e.target.value);
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
               ]),
@@ -1902,6 +2013,7 @@
                   onchange: (e) => {
                     optimizer.options.convertSodipodiArcs = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'convert-sodipodi' }, 'Convert sodipodi arcs')
@@ -1914,6 +2026,7 @@
                   onchange: (e) => {
                     optimizer.options.removeDefaultValues = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'remove-defaults' }, 'Remove default values')
@@ -1926,6 +2039,7 @@
                   onchange: (e) => {
                     optimizer.options.removeFontFamily = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'remove-font-family' }, 'Remove font-family')
@@ -1938,6 +2052,7 @@
                   onchange: (e) => {
                     optimizer.options.removeFontSize = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'remove-font-size' }, 'Remove font-size')
@@ -1950,6 +2065,7 @@
                   onchange: (e) => {
                     optimizer.options.removeTspan = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'remove-tspan' }, 'Remove tspan')
@@ -1962,6 +2078,7 @@
                   onchange: (e) => {
                     optimizer.options.removeStyling = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'remove-styling' }, 'Remove styling')
@@ -1980,6 +2097,7 @@
                       optimizer.options.removeGroups = false;
                       optimizer.options.groupSimilarElements = false;
                       optimizer.optimizeSvg();
+                      optimizer.saveToHistory();
                     }
                   }
                 }),
@@ -1996,6 +2114,7 @@
                       optimizer.options.removeGroups = false;
                       optimizer.options.groupSimilarElements = true;
                       optimizer.optimizeSvg();
+                      optimizer.saveToHistory();
                     }
                   }
                 }),
@@ -2012,6 +2131,7 @@
                       optimizer.options.removeGroups = true;
                       optimizer.options.groupSimilarElements = false;
                       optimizer.optimizeSvg();
+                      optimizer.saveToHistory();
                     }
                   }
                 }),
@@ -2025,6 +2145,7 @@
                   onchange: (e) => {
                     optimizer.options.useCustomDimensions = e.target.checked;
                     optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
                   }
                 }),
                 m('label', { for: 'custom-dimensions' }, 'Custom size:'),
@@ -2035,6 +2156,7 @@
                     optimizer.options.customWidth = parseInt(e.target.value);
                     if (optimizer.options.useCustomDimensions) {
                       optimizer.optimizeSvg();
+                      optimizer.saveToHistory();
                     }
                   }
                 }),
@@ -2046,6 +2168,7 @@
                     optimizer.options.customHeight = parseInt(e.target.value);
                     if (optimizer.options.useCustomDimensions) {
                       optimizer.optimizeSvg();
+                      optimizer.saveToHistory();
                     }
                   }
                 })
