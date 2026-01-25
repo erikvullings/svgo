@@ -32,7 +32,7 @@
   <meta name="description"
     content="An advanced online tool to optimize, clean, and resize SVG files, improving performance and compatibility.">
 
-  <script src="https://cdn.jsdelivr.net/npm/mithril@2.3.0/mithril.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mithril@2.3.8/mithril.min.js"></script>
   <!-- <script type="module" src="https://cdn.jsdelivr.net/npm/svgo@3.3.2/dist/svgo.browser.min.js"></script> -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
   <style>
@@ -302,6 +302,182 @@
       overflow: hidden;
       height: 100%;
     }
+
+    .tree-view {
+      height: 100%;
+      overflow: auto;
+      padding: 1rem;
+      background: #222;
+      color: #ccc;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.9rem;
+      user-select: none;
+      white-space: nowrap;
+    }
+
+    .tree-node-wrapper {
+      position: relative;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .tree-node-header {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.5rem;
+      /* padding: 0.2rem 0; */
+      cursor: pointer;
+      border-radius: 4px;
+      transition: background 0.2s;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      width: 100%;
+      position: relative;
+    }
+
+    .tree-node-header:hover {
+      background: #333;
+    }
+
+    .tree-node-header.selected {
+      background: #3a3a3a;
+      border-color: #4fc3f7;
+    }
+
+    .tree-node-header.drag-over {
+      border: 2px dashed #4fc3f7;
+      background: #444;
+    }
+
+    .tree-prefix {
+      color: #555;
+      white-space: pre;
+      flex-shrink: 0;
+    }
+
+    .tag-name {
+      color: #4fc3f7;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .attributes {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 0.4rem;
+      flex-grow: 1;
+      align-items: center;
+      padding-right: 4rem;
+      /* Space for controls */
+    }
+
+    .attribute {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.2rem;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+
+    .attr-name {
+      color: #9cdcfe;
+    }
+
+    .attr-value-container {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .attr-value {
+      color: #ce9178;
+      border: none;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 0 4px;
+      border-radius: 2px;
+      max-width: 200px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: text;
+      font-family: inherit;
+      font-size: inherit;
+      box-sizing: content-box;
+    }
+
+    .attr-value:focus {
+      background: #444;
+      outline: 1px solid #4fc3f7;
+      max-width: none;
+      z-index: 10;
+    }
+
+    .attr-value-full {
+      display: none;
+      position: absolute;
+      top: 100%;
+      left: 0;
+      background: #333;
+      color: #ce9178;
+      padding: 0.5rem;
+      border: 1px solid #4fc3f7;
+      border-radius: 4px;
+      z-index: 100;
+      max-width: 400px;
+      word-break: break-all;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+      white-space: normal;
+    }
+
+    .attr-value-container:hover .attr-value-full {
+      display: block;
+    }
+
+    .node-controls {
+      display: flex;
+      gap: 0.2rem;
+      margin-left: auto;
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+      position: sticky;
+      right: 0;
+      background: #222;
+      /* Match tree bg */
+      z-index: 5;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    /* Change background when hovering row so it blends */
+    .tree-node-header:hover .node-controls {
+      background: #333;
+      opacity: 1;
+    }
+
+    .tree-node-header.selected .node-controls {
+      background: #3a3a3a;
+      opacity: 1;
+    }
+
+    .control-btn {
+      background: #444;
+      color: #eee;
+      border: none;
+      padding: 0.1rem 0.3rem;
+      border-radius: 2px;
+      cursor: pointer;
+      font-size: 0.7rem;
+    }
+
+    .control-btn:hover {
+      background: #555;
+    }
+
+    .highlighted-preview {
+      outline: 4px solid #4fc3f7;
+      outline-offset: 4px;
+      position: relative;
+    }
   </style>
 </head>
 
@@ -309,7 +485,7 @@
   <div id="app"></div>
 
   <script type="module">
-    import SVGO from 'https://cdn.jsdelivr.net/npm/svgo@3.3.2/dist/svgo.browser.min.js';
+    import { optimize } from 'https://cdn.jsdelivr.net/npm/svgo@4.0.0/dist/svgo.browser.min.js';
 
     // TypeScript-like implementation in JavaScript
     class SVGOptimizer {
@@ -330,7 +506,11 @@
           removeFontSize: false,
           convertSodipodiArcs: true,
           groupSimilarElements: true,
-          groupingMode: 'group' // 'group', 'remove', or 'none'
+          groupingMode: 'group', // 'group', 'remove', or 'none'
+          viewMode: 'code', // 'code', 'tree'
+          selectedElementPath: null, // JSON path or similar to track selected element
+          treeDoc: null, // Parsed DOM for the Tree View
+          isUpdatingFromTree: false // Flag to prevent redundant re-parsing
         };
         this.unitConversion = {
           'px': 1,
@@ -350,6 +530,16 @@
             const checkContainer = () => {
               const container = document.getElementById('editor');
               if (container) {
+
+                monaco.languages.register({ id: 'xml' });
+                monaco.languages.setLanguageConfiguration('xml', {
+                  brackets: [['<', '>']],
+                  autoClosingPairs: [
+                    { open: '<', close: '>' },
+                    { open: '"', close: '"' },
+                    { open: "'", close: "'" }
+                  ]
+                });
                 this.editor = monaco.editor.create(container, {
                   value: this.originalSvg || '<!-- Paste your SVG code here or load a file -->',
                   language: 'xml',
@@ -392,6 +582,7 @@
               }
             }, 100);
           }
+          this.updateTreeDoc();
           this.optimizeSvg();
           m.redraw();
         };
@@ -1185,6 +1376,15 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      updateTreeDoc() {
+        if (!this.originalSvg) {
+          this.options.treeDoc = null;
+          return;
+        }
+        const parser = new DOMParser();
+        this.options.treeDoc = parser.parseFromString(this.originalSvg, 'image/svg+xml');
+      }
+
       async optimizeSvg() {
         if (!this.originalSvg.trim()) {
           this.optimizedSvg = '';
@@ -1200,7 +1400,7 @@
           }
 
           // First pass with SVGO
-          const svgoResult = SVGO.optimize(svg, {
+          const svgoResult = optimize(svg, {
             plugins: [
               "preset-default",
               'removeDoctype',
@@ -1329,6 +1529,269 @@
     }
 
     const optimizer = new SVGOptimizer();
+
+    const TreeView = {
+      view() {
+        if (!optimizer.originalSvg) return m('.tree-view', 'No SVG loaded');
+        if (!optimizer.options.treeDoc) optimizer.updateTreeDoc();
+
+        const svg = optimizer.options.treeDoc.querySelector('svg');
+
+        if (!svg) return m('.tree-view', 'Invalid SVG');
+
+        return m('.tree-view', [
+          m(TreeNode, { node: svg, path: '0', isRoot: true, prefix: '', isLast: true })
+        ]);
+      }
+    };
+
+    let dragSourcePath = null;
+    let dragOverPath = null;
+
+    // Uncontrolled Input Component to prevent Mithril redraws from interfering with typing
+    const UncontrolledInput = {
+      oncreate({ dom, attrs }) {
+        dom.value = attrs.value;
+        dom.size = Math.max(1, Math.min(20, dom.value.length));
+
+        dom.addEventListener('keydown', (e) => {
+          e.stopPropagation();
+          if (e.key === 'Escape') {
+            dom.value = attrs.value;
+            dom.blur();
+          }
+          if (e.key === 'Enter') {
+            dom.blur();
+          }
+        });
+
+        dom.addEventListener('input', (e) => {
+          e.target.size = Math.max(1, Math.min(20, e.target.value.length));
+        });
+
+        dom.addEventListener('change', (e) => {
+          attrs.type = 'change'; // Signal change
+          if (dom.value !== attrs.value) {
+            attrs.onChange(dom.value);
+          }
+        });
+      },
+      onupdate({ dom, attrs }) {
+        // Only update value from model if we are NOT currently editing/focused
+        if (document.activeElement !== dom) {
+          dom.value = attrs.value;
+          dom.size = Math.max(1, Math.min(20, dom.value.length));
+        }
+      },
+      view({ attrs }) {
+        return m('input.attr-value');
+      }
+    };
+
+    const TreeNode = {
+      view({ attrs }) {
+        const { node, path, isRoot, prefix, isLast } = attrs;
+        if (node.nodeType !== 1) return null;
+
+        const isSelected = optimizer.options.selectedElementPath === path;
+        const children = Array.from(node.children);
+
+        const currentPrefix = prefix;
+        const childPrefix = prefix + (isLast ? '   ' : '│  ');
+        const ornament = isRoot ? '' : (isLast ? '└─ ' : '├─ ');
+
+        return m('.tree-node-wrapper',
+          [
+            m('.tree-node-header', {
+              id: `node-${path.replace(/\./g, '-')}`,
+              class: `${isSelected ? 'selected' : ''} ${dragOverPath === path ? 'drag-over' : ''}`,
+              draggable: !isRoot,
+              ondragstart: (e) => {
+                dragSourcePath = path;
+                e.dataTransfer.setData('text/plain', path);
+                e.stopPropagation();
+              },
+              ondragover: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dragOverPath = path;
+              },
+              ondragleave: () => {
+                if (dragOverPath === path) dragOverPath = null;
+              },
+              ondrop: (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const sourcePath = e.dataTransfer.getData('text/plain');
+                if (sourcePath && sourcePath !== path) {
+                  moveElementTo(sourcePath, path);
+                }
+                dragOverPath = null;
+                dragSourcePath = null;
+              },
+              onclick: (e) => {
+                e.stopPropagation();
+                optimizer.options.selectedElementPath = path;
+                highlightElement(path);
+                m.redraw();
+              }
+            }, [
+              m('span.tree-prefix', currentPrefix + ornament),
+              m('span.tag-name', node.tagName),
+              m('.attributes', Array.from(node.attributes).map(attr =>
+                m('.attribute', [
+                  m('span.attr-name', attr.name),
+                  m('span', '='),
+                  m('.attr-value-container', [
+                    m(UncontrolledInput, {
+                      value: attr.value,
+                      onChange: (newValue) => {
+                        node.setAttribute(attr.name, newValue);
+                        updateFromTree(node.ownerDocument);
+                      }
+                    }),
+                    attr.value.length > 50 && m('.attr-value-full', attr.value)
+                  ])
+                ])
+              )),
+              m('.node-controls', [
+                !isRoot && m('button.control-btn', {
+                  onclick: (e) => {
+                    e.stopPropagation();
+                    moveElement(path, -1);
+                  }
+                }, '↑'),
+                !isRoot && m('button.control-btn', {
+                  onclick: (e) => {
+                    e.stopPropagation();
+                    moveElement(path, 1);
+                  }
+                }, '↓'),
+                m('button.control-btn', {
+                  style: 'color: #f44336;',
+                  onclick: (e) => {
+                    e.stopPropagation();
+                    if (confirm(`Delete <${node.tagName}>?`)) {
+                      node.remove();
+                      updateFromTree(node.ownerDocument);
+                    }
+                  }
+                }, '×')
+              ])
+            ]),
+            m('.tree-node-children', children.map((child, index) =>
+              m(TreeNode, {
+                node: child,
+                path: `${path}.${index}`,
+                prefix: childPrefix,
+                isLast: index === children.length - 1,
+              })
+            ))
+          ]);
+      }
+    };
+
+    function updateFromTree(doc) {
+      optimizer.options.isUpdatingFromTree = true;
+      optimizer.originalSvg = new XMLSerializer().serializeToString(doc);
+      if (optimizer.editor) {
+        optimizer.editor.setValue(optimizer.originalSvg);
+      }
+      optimizer.optimizeSvg();
+      optimizer.options.isUpdatingFromTree = false;
+      m.redraw();
+    }
+
+    function moveElementTo(sourcePath, targetPath) {
+      if (sourcePath === targetPath) return;
+
+      const doc = optimizer.options.treeDoc;
+      const source = getElementByPath(doc, sourcePath);
+      const target = getElementByPath(doc, targetPath);
+
+      if (source && target) {
+        const targetParent = target.parentElement;
+
+        if (target.tagName === 'g' || target.tagName === 'svg') {
+          target.insertBefore(source, target.firstChild);
+        } else if (targetParent) {
+          targetParent.insertBefore(source, target);
+        }
+
+        updateFromTree(doc);
+      }
+    }
+
+    function moveElement(path, direction) {
+      const doc = optimizer.options.treeDoc;
+      const element = getElementByPath(doc, path);
+
+      if (element && element.parentElement) {
+        const parent = element.parentElement;
+        const index = Array.from(parent.children).indexOf(element);
+        const newIndex = index + direction;
+
+        if (newIndex >= 0 && newIndex < parent.children.length) {
+          if (direction === -1) {
+            parent.insertBefore(element, parent.children[newIndex]);
+          } else {
+            parent.insertBefore(element, parent.children[newIndex].nextSibling);
+          }
+
+          const pathParts = path.split('.');
+          pathParts[pathParts.length - 1] = newIndex;
+          optimizer.options.selectedElementPath = pathParts.join('.');
+
+          updateFromTree(doc);
+        }
+      }
+    }
+
+    function getElementByPath(doc, path) {
+      const parts = path.split('.');
+      let current = doc.querySelector('svg');
+      if (parts[0] !== '0') return null;
+      if (parts.length === 1) return current;
+
+      for (let i = 1; i < parts.length; i++) {
+        const index = parseInt(parts[i]);
+        current = current.children[index];
+        if (!current) return null;
+      }
+      return current;
+    }
+
+    function highlightElement(path) {
+      const previewContainer = document.querySelector('.preview-container');
+      const previewSvg = previewContainer.querySelector('svg');
+      if (!previewSvg) return;
+
+      previewSvg.querySelectorAll('.highlighted-preview').forEach(el => el.classList.remove('highlighted-preview'));
+
+      const targetEl = getElementInSvgByPath(previewSvg, path);
+
+      if (targetEl && targetEl.getBBox) {
+        try {
+          targetEl.classList.add('highlighted-preview');
+        } catch (e) {
+          console.warn('Could not highlight element:', e);
+        }
+      }
+    }
+
+    function getElementInSvgByPath(svg, path) {
+      const parts = path.split('.');
+      let current = svg;
+      if (parts[0] !== '0') return null;
+
+      for (let i = 1; i < parts.length; i++) {
+        const index = parseInt(parts[i]);
+        current = current.children[index];
+        if (!current) return null;
+      }
+      return current;
+    }
+
 
     const App = {
       oncreate() {
@@ -1601,13 +2064,24 @@
               m('.editor-panel', [
                 m('.panel-header', [
                   m('span', 'Source SVG'),
-                  optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null
+                  optimizer.originalSvg ? m('span', `${optimizer.originalSvg.split('\n').length} lines`) : null,
+                  m('div', { style: 'display: flex; gap: 0.5rem;' }, [
+                    m('button', {
+                      style: `background: ${optimizer.options.viewMode === 'code' ? '#4fc3f7' : '#444'}; font-size: 0.8rem; padding: 0.2rem 0.6rem;`,
+                      onclick: () => optimizer.options.viewMode = 'code'
+                    }, 'Code'),
+                    m('button', {
+                      style: `background: ${optimizer.options.viewMode === 'tree' ? '#4fc3f7' : '#444'}; font-size: 0.8rem; padding: 0.2rem 0.6rem;`,
+                      onclick: () => optimizer.options.viewMode = 'tree'
+                    }, 'Tree'),
+                  ])
                 ]),
                 m('.editor-container', [
                   m('div#editor', {
-                    style: `height: 100%; ${!optimizer.editorReady ? 'display: none;' : ''}`
+                    style: `height: 100%; ${!optimizer.editorReady || optimizer.options.viewMode !== 'code' ? 'display: none;' : ''}`
                   }),
-                  !optimizer.editorReady ? m('div', { style: 'display: flex; align-items: center; justify-content: center; height: 100%; color: #888;' }, 'Initializing editor...') : null
+                  !optimizer.editorReady ? m('div', { style: 'display: flex; align-items: center; justify-content: center; height: 100%; color: #888;' }, 'Initializing editor...') : null,
+                  optimizer.options.viewMode === 'tree' ? m(TreeView) : null
                 ])
               ]),
 
@@ -1708,6 +2182,9 @@
     setupPanEvents();
 
     document.addEventListener('keydown', (e) => {
+      // Don't pan if typing in an input or textarea
+      if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+
       const step = 20;
       const zoomStep = 1.1;
       switch (e.key) {
