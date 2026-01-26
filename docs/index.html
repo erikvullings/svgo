@@ -318,7 +318,7 @@
       left: 0;
       right: 0;
       bottom: 0;
-      padding: 1rem;
+      padding: 1rem 0;
       background: #222;
       color: #ccc;
       font-family: 'Courier New', Courier, monospace;
@@ -515,19 +515,70 @@
       background: #555;
     }
 
-    svg .highlighted-preview {
-      border: 2px solid #4fc3f7;
-      position: relative;
-      opacity: 0.6;
-      box-shadow: 0 0 0 2px #4fc3f7;
+    /* Base highlight for text – works on both dark & light backgrounds */
+    .highlighted-preview {
+      fill: #00ffff !important;
+      /* vivid cyan – excellent contrast */
+      font-weight: bold !important;
+      /* makes it stand out more */
+      cursor: pointer;
+      /* optional – signals interactivity */
     }
 
-    svg path.highlighted-preview {
-      stroke: #4fc3f7;
+    /* Strong glow using drop-shadow filter – very reliable for SVG */
+    .highlighted-preview {
+      filter:
+        drop-shadow(0 0 3px #00ffff)
+        /* tight inner/near glow */
+        drop-shadow(0 0 8px #00ffffaa)
+        /* medium glow */
+        drop-shadow(0 0 14px #00ffff55);
+      /* soft outer halo */
     }
 
-    svg text.highlighted-preview {
-      fill: #4fc3f7;
+    /* Alternative: white + dark outline (very clean & readable) */
+    .highlighted-preview.white-outline {
+      fill: white !important;
+      paint-order: stroke fill;
+      /* stroke paints first = outline */
+      stroke: black;
+      stroke-width: 2.8px;
+      /* adjust 2–4 px depending on font-size */
+      filter: drop-shadow(0 0 5px rgba(0, 0, 0, 0.7));
+    }
+
+    /* Red attention style (good for warnings/errors) */
+    .highlighted-preview.red-alert {
+      fill: #ff4d4f !important;
+      filter:
+        drop-shadow(0 0 4px #ff4d4f) drop-shadow(0 0 10px #ff4d4faa);
+    }
+
+    /* Yellow high-contrast style (pops everywhere) */
+    .highlighted-preview.yellow-pop {
+      fill: #ffff00 !important;
+      filter: drop-shadow(0 0 6px #ffff0088);
+    }
+
+    text.highlighted-preview,
+    .highlighted-preview text {
+      fill: #00ffff !important;
+      /* or your preferred vivid color */
+      stroke: black !important;
+      /* or #0008 for softer outline */
+      stroke-width: 2.5px !important;
+      /* 1.8–3.5 px depending on font-size */
+      paint-order: stroke fill !important;
+      /* stroke first = outline around letters */
+      font-weight: bold !important;
+    }
+
+    /* Optional: white text + dark outline (very readable) */
+    text.highlighted-preview.white-outline {
+      fill: white !important;
+      stroke: #000 !important;
+      stroke-width: 3px !important;
+      paint-order: stroke fill !important;
     }
   </style>
 </head>
@@ -640,12 +691,31 @@
         reader.onload = (e) => {
           this.originalSvg = e.target.result;
           if (this.editor) {
-            this.editor.setValue(this.originalSvg);
+            try {
+              this.editor.setValue(this.originalSvg);
+            } catch (err) {
+              console.error('Failed to set editor value:', err);
+              // Try to fix common SVG issues before setting
+              try {
+                // Try to sanitize the SVG by fixing common issues
+                this.originalSvg = this.sanitizeSvg(this.originalSvg);
+                this.editor.setValue(this.originalSvg);
+              } catch (fixErr) {
+                console.error('Failed to sanitize SVG:', fixErr);
+                // Fall back to showing the SVG in a plain text modal
+                alert('The SVG file contains formatting issues that cannot be displayed in the editor. Please try a different file.');
+                return;
+              }
+            }
           } else {
             // If editor isn't ready yet, reinitialize it with the content
             setTimeout(() => {
               if (this.editor) {
-                this.editor.setValue(this.originalSvg);
+                try {
+                  this.editor.setValue(this.originalSvg);
+                } catch (err) {
+                  console.error('Failed to set editor value (delayed):', err);
+                }
               }
             }, 100);
           }
@@ -1456,6 +1526,46 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      sanitizeSvg(svg) {
+        if (!svg || typeof svg !== 'string') return svg;
+
+        try {
+          // Try to parse and validate the SVG
+          const parser = new DOMParser();
+          const doc = parser.parseFromString(svg, 'image/svg+xml');
+          const parseError = doc.querySelector('parsererror');
+          if (parseError) {
+            console.warn('SVG parsing error:', parseError.textContent);
+            // Try to fix common issues
+            svg = this.fixCommonSvgIssues(svg);
+          }
+        } catch (e) {
+          console.warn('SVG sanitization failed, using original:', e);
+        }
+        return svg;
+      }
+
+      fixCommonSvgIssues(svg) {
+        // Try to fix common SVG issues
+        let fixed = svg;
+
+        // Fix malformed path data - handle missing numbers after operators
+        // Pattern: ...124 6.8 18-12.51Z (where 18-12.51 should be separate numbers)
+        fixed = fixed.replace(/(\d+)-(\d+(\.\d+)?)/g, '$1 $2');
+
+        // Fix common encoding issues
+        fixed = fixed.replace(/&gt;/g, '>');
+        fixed = fixed.replace(/&lt;/g, '<');
+        fixed = fixed.replace(/&amp;/g, '&');
+        fixed = fixed.replace(/&quot;/g, '"');
+        fixed = fixed.replace(/&apos;/g, "'");
+
+        // Fix common whitespace issues
+        fixed = fixed.replace(/>\s+</g, '><');
+
+        return fixed;
+      }
+
       updateTreeDoc() {
         if (!this.originalSvg) {
           this.options.treeDoc = null;
@@ -1851,10 +1961,20 @@
                 // Text node - create a special TreeNode-like representation
                 const isLastChild = index === children.length - 1;
                 const textOrnament = isLastChild ? '└─ ' : '├─ ';
+                const textPath = `${path}.[-${index + 1}]`;
                 return m('.tree-node-wrapper', [
                   m('.tree-node-header', {
                     class: 'text-node',
-                    style: 'color: #9cdcfe;'
+                    style: 'color: #9cdcfe;',
+                    oncreate: (vnode) => {
+                      vnode.dom.onclick = (e) => {
+                        e.stopPropagation();
+                        console.log('Text node clicked:', { path: textPath, child });
+                        optimizer.options.selectedElementPath = textPath;
+                        highlightElement(textPath);
+                        m.redraw();
+                      };
+                    }
                   }, [
                     m('span.tree-prefix', childPrefix + textOrnament),
                     m('span.tag-name', '[Text Node]'),
@@ -1961,33 +2081,85 @@
     }
 
     function highlightElement(path) {
+      console.log('highlightElement called with:', path);
       const previewContainer = document.querySelector('.preview-container');
       const previewSvg = previewContainer.querySelector('svg');
-      if (!previewSvg) return;
+      if (!previewSvg) {
+        console.log('No preview SVG found!');
+        return;
+      }
 
       previewSvg.querySelectorAll('.highlighted-preview').forEach(el => el.classList.remove('highlighted-preview'));
 
       const targetEl = getElementInSvgByPath(previewSvg, path);
+      console.log('Target element:', targetEl);
 
       if (targetEl && targetEl.getBBox) {
         try {
           targetEl.classList.add('highlighted-preview');
+          console.log('Element highlighted');
         } catch (e) {
           console.warn('Could not highlight element:', e);
         }
+      } else {
+        console.log('Could not highlight element: targetEl not found or no getBBox');
       }
     }
 
     function getElementInSvgByPath(svg, path) {
       const parts = path.split('.');
       let current = svg;
-      if (parts[0] !== '0') return null;
+      if (parts[0] !== '0') {
+        console.log('Invalid root:', path);
+        return null;
+      }
+
+      console.log('Traversing path:', path, 'parts:', parts);
 
       for (let i = 1; i < parts.length; i++) {
-        const index = parseInt(parts[i]);
-        current = current.children[index];
-        if (!current) return null;
+        const indexStr = parts[i];
+        console.log('  Part', i, ':', indexStr);
+
+        // Handle array format for text nodes: [-1], [-2], etc.
+        const arrayMatch = indexStr.match(/^\[-(\d+)\]$/);
+        if (arrayMatch) {
+          const textIndex = parseInt(arrayMatch[1]) - 1; // Convert to 0-based index
+          console.log('  Found text node index:', textIndex);
+          // Find the text node at this index
+          const children = Array.from(current.childNodes);
+          const textNodes = children.filter(n => n.nodeType === 3);
+          console.log('  Total text nodes:', textNodes.length, 'textIndex:', textIndex);
+          if (textNodes.length > textIndex) {
+            current = textNodes[textIndex];
+            console.log('  Text node found:', current.textContent.substring(0, 20) + '...');
+          } else {
+            console.log('  Text node not found!');
+            return null;
+          }
+          continue;
+        }
+
+        let index = parseInt(indexStr);
+
+        // Handle negative indices for text nodes
+        if (index < 0) {
+          // Find the text node at this index
+          const children = Array.from(current.childNodes);
+          const textNodes = children.filter(n => n.nodeType === 3);
+          if (textNodes.length >= Math.abs(index)) {
+            current = textNodes[Math.abs(index)];
+          } else {
+            return null;
+          }
+        } else {
+          current = current.children[index];
+          if (!current) {
+            console.log('  Element not found at index:', index, 'total children:', current.children.length);
+            return null;
+          }
+        }
       }
+      console.log('Final element:', current.tagName || '[Text Node]');
       return current;
     }
 
@@ -2309,6 +2481,17 @@
                       style: `background: ${optimizer.options.viewMode === 'tree' ? '#4fc3f7' : '#444'}; font-size: 0.8rem; padding: 0.2rem 0.6rem;`,
                       onclick: () => optimizer.options.viewMode = 'tree'
                     }, 'Tree'),
+                    m('button', {
+                      style: 'background: #444; font-size: 0.8rem; padding: 0.2rem 0.6rem; cursor: pointer; border: none; border-radius: 4px; color: #e0e0e0; display: flex; align-items: center; gap: 0.3rem;',
+                      onclick: () => copyToClipboard(),
+                      title: 'Copy to clipboard'
+                    }, [
+                      m('svg[width=16][height=16][viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2][stroke-linecap=round][stroke-linejoin=round]', [
+                        m('path[stroke-linecap=round][stroke-linejoin=round][d=M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"]'),
+                        m('path[stroke-linecap=round][stroke-linejoin=round][d=M16 8v8m-4-5v5m-4-2v2"]')
+                      ]),
+                      m('span', 'Copy')
+                    ])
                   ])
                 ]),
                 m('.editor-container', [
@@ -2415,6 +2598,33 @@
 
     m.mount(document.getElementById('app'), App);
     setupPanEvents();
+
+    function copyToClipboard() {
+      if (!optimizer.originalSvg) {
+        alert('No SVG content to copy');
+        return;
+      }
+
+      navigator.clipboard.writeText(optimizer.originalSvg).then(() => {
+        // Show a temporary success message
+        const copyBtn = document.querySelector('button[title="Copy to clipboard"]');
+        if (copyBtn) {
+          const originalText = copyBtn.innerHTML;
+          copyBtn.innerHTML = `
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
+            </svg>
+            <span>Copied!</span>
+          `;
+          setTimeout(() => {
+            copyBtn.innerHTML = originalText;
+          }, 2000);
+        }
+      }).catch(err => {
+        console.error('Failed to copy:', err);
+        alert('Failed to copy to clipboard');
+      });
+    }
 
     document.addEventListener('keydown', (e) => {
       // Don't pan if typing in an input or textarea
