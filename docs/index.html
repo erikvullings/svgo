@@ -119,12 +119,15 @@
       left: -9999px;
     }
 
+    .controls>button {
+      height: 40px;
+    }
+
     button,
     .file-button {
       background: #4fc3f7;
       color: #1a1a1a;
       border: none;
-      height: 40px;
       padding: 0.4rem .8rem;
       margin-right: 10px;
       border-radius: 4px;
@@ -231,6 +234,7 @@
       flex: 1;
       position: relative;
       padding-top: 10px;
+      overflow: hidden;
     }
 
     .preview-container {
@@ -309,8 +313,11 @@
     }
 
     .tree-view {
-      height: 100%;
-      overflow: auto;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
       padding: 1rem;
       background: #222;
       color: #ccc;
@@ -318,6 +325,36 @@
       font-size: 0.9rem;
       user-select: none;
       white-space: nowrap;
+      scrollbar-color: #555 #222;
+    }
+
+    .tree-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+      max-height: 100%;
+    }
+
+    .tree-view::-webkit-scrollbar {
+      width: 12px;
+      height: 12px;
+    }
+
+    .tree-view::-webkit-scrollbar-track {
+      background: #222;
+    }
+
+    .tree-view::-webkit-scrollbar-thumb {
+      background: #555;
+      border-radius: 6px;
+      border: 2px solid #222;
+    }
+
+    .tree-view::-webkit-scrollbar-thumb:hover {
+      background: #666;
+    }
+
+    .tree-view::-webkit-scrollbar-corner {
+      background: #222;
     }
 
     .tree-node-wrapper {
@@ -335,7 +372,7 @@
       cursor: pointer;
       border-radius: 4px;
       transition: background 0.2s;
-      border: 1px solid transparent;
+      /* border: 1px solid transparent; */
       white-space: nowrap;
       width: 100%;
       position: relative;
@@ -1657,7 +1694,9 @@
         if (!svg) return m('.tree-view', 'Invalid SVG');
 
         return m('.tree-view', [
-          m(TreeNode, { node: svg, path: '0', isRoot: true, prefix: '', isLast: true })
+          m('.tree-content', [
+            m(TreeNode, { node: svg, path: '0', isRoot: true, prefix: '', isLast: true })
+          ])
         ]);
       }
     };
@@ -1711,7 +1750,17 @@
         if (node.nodeType !== 1) return null;
 
         const isSelected = optimizer.options.selectedElementPath === path;
-        const children = Array.from(node.children);
+
+        // For text and tspan elements, we want to include both children and text content
+        let children = [];
+        if (node.tagName === 'text' || node.tagName === 'tspan') {
+          // Include both regular children and text nodes
+          const allNodes = Array.from(node.childNodes);
+          children = allNodes.filter(n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim() !== ''));
+        } else {
+          // For other elements, just use regular children
+          children = Array.from(node.children);
+        }
 
         const currentPrefix = prefix;
         const childPrefix = prefix + (isLast ? '   ' : '│  ');
@@ -1796,14 +1845,47 @@
                 }, '×')
               ])
             ]),
-            m('.tree-node-children', children.map((child, index) =>
-              m(TreeNode, {
-                node: child,
-                path: `${path}.${index}`,
-                prefix: childPrefix,
-                isLast: index === children.length - 1,
-              })
-            ))
+            m('.tree-node-children', children.map((child, index) => {
+              // For text nodes, create a special representation
+              if (child.nodeType === 3) {
+                // Text node - create a special TreeNode-like representation
+                const isLastChild = index === children.length - 1;
+                const textOrnament = isLastChild ? '└─ ' : '├─ ';
+                return m('.tree-node-wrapper', [
+                  m('.tree-node-header', {
+                    class: 'text-node',
+                    style: 'color: #9cdcfe;'
+                  }, [
+                    m('span.tree-prefix', childPrefix + textOrnament),
+                    m('span.tag-name', '[Text Node]'),
+                    m('.attributes', [
+                      m('.attribute', [
+                        m('span.attr-name', 'content'),
+                        m('span', '='),
+                        m('.attr-value-container', [
+                          m(UncontrolledInput, {
+                            value: child.textContent,
+                            onChange: (newValue) => {
+                              child.textContent = newValue;
+                              updateFromTree(node.ownerDocument);
+                            }
+                          }),
+                          child.textContent.length > 50 && m('.attr-value-full', child.textContent)
+                        ])
+                      ])
+                    ])
+                  ])
+                ]);
+              } else {
+                // Regular element child
+                return m(TreeNode, {
+                  node: child,
+                  path: `${path}.${index}`,
+                  prefix: childPrefix,
+                  isLast: index === children.length - 1,
+                });
+              }
+            }))
           ]);
       }
     };
