@@ -610,14 +610,53 @@
       return Array.from(node.children || []).some(hasRoundableAttrs);
     }
 
+    function extractTranslate(transform) {
+      if (!transform) return { dx: 0, dy: 0, rest: '' };
+
+      let dx = 0;
+      let dy = 0;
+
+      const rest = transform.replace(/translate\(\s*([^)]+)\)/g, (_, args) => {
+        const parts = args.split(/[\s,]+/).map(Number);
+        dx += parts[0] || 0;
+        dy += parts[1] || 0;
+        return '';
+      }).trim();
+
+      return { dx, dy, rest };
+    }
+
     function roundAttrsRecursive(node) {
       if (!node || node.nodeType !== 1) return;
 
-      for (const attr of Array.from(node.attributes || [])) {
+      let dx = 0;
+      let dy = 0;
+
+      const transform = node.getAttribute('transform');
+      if (transform) {
+        const extracted = extractTranslate(transform);
+        dx = extracted.dx;
+        dy = extracted.dy;
+
+        if (extracted.rest) {
+          node.setAttribute('transform', extracted.rest);
+        } else {
+          node.removeAttribute('transform');
+        }
+      }
+
+      for (const attr of Array.from(node.attributes)) {
         if (!ROUNDABLE_ATTRS.has(attr.name)) continue;
 
-        const num = parseFloat(attr.value);
+        let num = parseFloat(attr.value);
         if (!Number.isFinite(num)) continue;
+
+        // Apply translation first
+        if (attr.name === 'x' || attr.name === 'cx') {
+          num += dx;
+        } else if (attr.name === 'y' || attr.name === 'cy') {
+          num += dy;
+        }
 
         const rounded = Math.round(num);
 
@@ -629,8 +668,9 @@
         node.setAttribute(attr.name, newValue);
       }
 
-      Array.from(node.children || []).forEach(roundAttrsRecursive);
+      Array.from(node.children).forEach(roundAttrsRecursive);
     }
+
 
     // TypeScript-like implementation in JavaScript
     class SVGOptimizer {
