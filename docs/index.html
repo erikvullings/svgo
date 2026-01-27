@@ -589,6 +589,49 @@
   <script type="module">
     import { optimize } from 'https://cdn.jsdelivr.net/npm/svgo@4.0.0/dist/svgo.browser.min.js';
 
+    const ROUNDABLE_ATTRS = new Set([
+      'x', 'y', 'cx', 'cy',
+      'width', 'height',
+      'r', 'rx', 'ry'
+    ]);
+
+    const ZERO_SENSITIVE_ATTRS = new Set([
+      'width', 'height',
+      'r', 'rx', 'ry'
+    ]);
+
+    function hasRoundableAttrs(node) {
+      if (!node || node.nodeType !== 1) return false;
+
+      for (const attr of Array.from(node.attributes || [])) {
+        if (ROUNDABLE_ATTRS.has(attr.name)) return true;
+      }
+
+      return Array.from(node.children || []).some(hasRoundableAttrs);
+    }
+
+    function roundAttrsRecursive(node) {
+      if (!node || node.nodeType !== 1) return;
+
+      for (const attr of Array.from(node.attributes || [])) {
+        if (!ROUNDABLE_ATTRS.has(attr.name)) continue;
+
+        const num = parseFloat(attr.value);
+        if (!Number.isFinite(num)) continue;
+
+        const rounded = Math.round(num);
+
+        const newValue =
+          ZERO_SENSITIVE_ATTRS.has(attr.name) && rounded === 0
+            ? num.toFixed(1)
+            : rounded.toFixed(0);
+
+        node.setAttribute(attr.name, newValue);
+      }
+
+      Array.from(node.children || []).forEach(roundAttrsRecursive);
+    }
+
     // TypeScript-like implementation in JavaScript
     class SVGOptimizer {
       constructor() {
@@ -1931,18 +1974,31 @@
                 ])
               )),
               m('.node-controls', [
+
+                // ⭕ round-to-zero button (only if useful)
+                isSelected && hasRoundableAttrs(node) && m('button.control-btn', {
+                  title: 'Round numeric attributes to 0 decimals',
+                  onclick: (e) => {
+                    e.stopPropagation();
+                    roundAttrsRecursive(node);
+                    updateFromTree(node.ownerDocument);
+                  }
+                }, '0'),
+
                 !isRoot && m('button.control-btn', {
                   onclick: (e) => {
                     e.stopPropagation();
                     moveElement(path, -1);
                   }
                 }, '↑'),
+
                 !isRoot && m('button.control-btn', {
                   onclick: (e) => {
                     e.stopPropagation();
                     moveElement(path, 1);
                   }
                 }, '↓'),
+
                 m('button.control-btn', {
                   style: 'color: #f44336;',
                   onclick: (e) => {
