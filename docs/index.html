@@ -420,6 +420,7 @@
       gap: 0.2rem;
       font-size: 0.8rem;
       flex-shrink: 0;
+      position: relative;
     }
 
     .attr-name {
@@ -475,6 +476,26 @@
       display: block;
     }
 
+    .attr-remove {
+      display: none;
+      background: transparent;
+      color: #888;
+      border: none;
+      cursor: pointer;
+      font-size: 0.7rem;
+      padding: 0 2px;
+      line-height: 1;
+    }
+
+    .attribute:hover .attr-remove {
+      display: inline-flex;
+      color: #f44336;
+    }
+
+    .attr-remove:hover {
+      color: #ff6b6b;
+    }
+
     .node-controls {
       display: flex;
       gap: 0.2rem;
@@ -513,6 +534,83 @@
 
     .control-btn:hover {
       background: #555;
+    }
+
+    .attr-dialog-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+    }
+
+    .attr-dialog {
+      background: #1e1e1e;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      border-radius: 6px;
+      padding: 0.8rem;
+      width: 320px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      font-family: inherit;
+    }
+
+    .attr-dialog-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      margin-bottom: 0.6rem;
+      color: #9cdcfe;
+    }
+
+    .attr-dialog .field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .attr-dialog label {
+      font-size: 0.75rem;
+      color: #aaa;
+    }
+
+    .attr-dialog input {
+      background: #2a2a2a;
+      border: 1px solid #555;
+      color: #eee;
+      padding: 0.35rem 0.45rem;
+      border-radius: 4px;
+      font-size: 0.85rem;
+    }
+
+    .attr-dialog input:focus {
+      outline: 1px solid #4fc3f7;
+      border-color: #4fc3f7;
+    }
+
+    .attr-dialog .actions {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: flex-end;
+      margin-top: 0.4rem;
+    }
+
+    .attr-dialog .btn {
+      background: #3a3a3a;
+      color: #e0e0e0;
+      border: none;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    .attr-dialog .btn.primary {
+      background: #4fc3f7;
+      color: #1a1a1a;
+      font-weight: 600;
     }
 
     /* Base highlight for text – works on both dark & light backgrounds */
@@ -599,6 +697,31 @@
       'width', 'height',
       'r', 'rx', 'ry'
     ]);
+
+    const KNOWN_SVG_ATTRS = new Set([
+      'id', 'class', 'style', 'transform', 'opacity', 'display', 'visibility',
+      'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
+      'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
+      'stroke-opacity', 'clip-path', 'mask', 'filter', 'vector-effect',
+      'shape-rendering', 'text-rendering', 'paint-order', 'pointer-events',
+      'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
+      'width', 'height', 'd', 'points', 'pathlength',
+      'dx', 'dy', 'font-family', 'font-size', 'font-weight', 'font-style',
+      'text-anchor', 'dominant-baseline', 'letter-spacing', 'word-spacing',
+      'viewbox', 'preserveaspectratio',
+      'href', 'xlink:href',
+      'offset', 'stop-color', 'stop-opacity',
+      'gradientunits', 'gradienttransform', 'fx', 'fy',
+      'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'markerunits',
+      'patternunits', 'patterncontentunits', 'patterntransform',
+      'maskunits', 'maskcontentunits', 'clippathunits',
+      'xmlns', 'xmlns:xlink', 'xml:space'
+    ]);
+
+    const PRESERVE_ATTR_NAMES = new Set(['role', 'tabindex']);
+    const PRESERVE_ATTR_PREFIXES = ['data-', 'aria-'];
+    const BLOCKED_ATTR_PREFIXES = ['inkscape:', 'sodipodi:'];
+    const RESERVED_ATTR_NAME = 'data-cx-id';
 
     function hasRoundableAttrs(node) {
       if (!node || node.nodeType !== 1) return false;
@@ -709,6 +832,8 @@
           'in': 96     // 1in = 96px
         };
         this.isRestoringHistory = false;
+        this.copyStatus = 'idle';
+        this.copyResetTimer = null;
         // Initialize with empty state
         this.saveToHistory();
 
@@ -744,6 +869,7 @@
                 });
 
                 this.editor.onDidChangeModelContent(() => {
+                  if (this.options.isUpdatingFromTree) return;
                   this.originalSvg = this.editor.getValue();
                   this.optimizeSvg();
                   // Update tree doc to reflect the new optimized content
@@ -767,6 +893,61 @@
             checkContainer();
           });
         });
+      }
+
+      shouldPreserveAttribute(name) {
+        if (!name) return false;
+        const lower = name.toLowerCase();
+        if (lower === RESERVED_ATTR_NAME) return false;
+        if (BLOCKED_ATTR_PREFIXES.some(prefix => lower.startsWith(prefix))) return false;
+        if (lower.startsWith('xmlns')) return false;
+        if (PRESERVE_ATTR_PREFIXES.some(prefix => lower.startsWith(prefix))) return true;
+        if (PRESERVE_ATTR_NAMES.has(lower)) return true;
+        if (lower.includes(':')) return true;
+        return !KNOWN_SVG_ATTRS.has(lower);
+      }
+
+      injectPreserveMarkers(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const preserved = new Map();
+        let counter = 0;
+
+        doc.querySelectorAll('*').forEach(el => {
+          const attrsToPreserve = {};
+          Array.from(el.attributes).forEach(attr => {
+            if (this.shouldPreserveAttribute(attr.name)) {
+              attrsToPreserve[attr.name] = attr.value;
+            }
+          });
+
+          if (Object.keys(attrsToPreserve).length > 0) {
+            const id = `cx-${counter++}`;
+            el.setAttribute(RESERVED_ATTR_NAME, id);
+            preserved.set(id, attrsToPreserve);
+          }
+        });
+
+        return { svg: new XMLSerializer().serializeToString(doc), preserved };
+      }
+
+      restorePreservedAttributes(svg, preserved) {
+        if (!preserved || preserved.size === 0) return svg;
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        preserved.forEach((attrs, id) => {
+          const el = doc.querySelector(`[${RESERVED_ATTR_NAME}="${id}"]`);
+          if (!el) return;
+          Object.entries(attrs).forEach(([name, value]) => {
+            if (!el.hasAttribute(name)) {
+              el.setAttribute(name, value);
+            }
+          });
+        });
+
+        doc.querySelectorAll(`[${RESERVED_ATTR_NAME}]`).forEach(el => el.removeAttribute(RESERVED_ATTR_NAME));
+        return new XMLSerializer().serializeToString(doc);
       }
 
       loadFile(file) {
@@ -821,11 +1002,20 @@
       }
 
       loadOptimizedFile() {
+        if (!this.originalSvg.trim()) return;
+        this.optimizeSvg();
         if (this.optimizedSvg) {
           this.originalSvg = this.optimizedSvg;
-          this.editor.setValue(this.originalSvg);
+          if (this.editor) {
+            this.options.isUpdatingFromTree = true;
+            this.editor.setValue(this.originalSvg);
+            this.options.isUpdatingFromTree = false;
+          }
           // Update tree doc to reflect the optimized content
           this.updateTreeDoc();
+          this.optimizeSvg();
+          this.saveToHistory();
+          m.redraw();
         }
       }
 
@@ -997,7 +1187,6 @@
       groupTextByAttributes(svg) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(svg, 'image/svg+xml');
-        const SVG_NS = 'http://www.w3.org/2000/svg';
 
         // Find all text elements
         const textElements = Array.from(doc.querySelectorAll('text, tspan'));
@@ -1006,171 +1195,148 @@
 
         // Attributes we want to group by
         const groupableAttributes = ['font-family', 'font-size', 'text-anchor', 'font-weight', 'font-style'];
+        this.groupElementsByCommonAttributes(doc, ['text', 'tspan'], groupableAttributes);
 
-        // Group text elements by their attribute signature
-        const groups = new Map();
+        return new XMLSerializer().serializeToString(doc);
+      }
 
-        textElements.forEach(el => {
-          const attributes = {};
-          let hasGroupableAttrs = false;
-
-          groupableAttributes.forEach(attr => {
-            const value = el.getAttribute(attr);
-            if (value) {
-              attributes[attr] = value;
-              hasGroupableAttrs = true;
-            }
-          });
-
-          // Only group elements that have at least one groupable attribute
-          if (hasGroupableAttrs) {
-            const signature = JSON.stringify(attributes);
-            if (!groups.has(signature)) {
-              groups.set(signature, { attributes, elements: [] });
-            }
-            groups.get(signature).elements.push(el);
+      getGroupableAttributes(el, groupableAttributes) {
+        const attributes = {};
+        groupableAttributes.forEach(attr => {
+          const value = el.getAttribute(attr);
+          if (value !== null) {
+            attributes[attr] = value;
           }
         });
+        return attributes;
+      }
 
-        // Process groups with 2 or more elements
-        groups.forEach(({ attributes, elements }) => {
-          if (elements.length >= 2) {
-            // Create a group element
-            const group = doc.createElementNS(SVG_NS, 'g');
+      intersectGroupableAttributes(base, next) {
+        const intersection = {};
+        Object.keys(base).forEach(attr => {
+          if (next[attr] === base[attr]) {
+            intersection[attr] = base[attr];
+          }
+        });
+        return intersection;
+      }
 
-            // Add common attributes to the group
-            Object.entries(attributes).forEach(([attr, value]) => {
+      estimateGroupSavings(commonAttributes, elementCount) {
+        if (elementCount < 2) return 0;
+        const attrSize = Object.entries(commonAttributes).reduce((sum, [attr, value]) => {
+          return sum + ` ${attr}="${value}"`.length;
+        }, 0);
+        const groupOverhead = 7; // "<g></g>"
+        return (elementCount - 1) * attrSize - groupOverhead;
+      }
+
+      groupRunByAttributes(parent, run, groupableAttributes) {
+        const grouped = new Set();
+        let i = 0;
+
+        while (i < run.length) {
+          if (grouped.has(run[i])) {
+            i++;
+            continue;
+          }
+
+          let commonAttributes = this.getGroupableAttributes(run[i], groupableAttributes);
+          if (Object.keys(commonAttributes).length === 0) {
+            i++;
+            continue;
+          }
+
+          let bestGroup = null;
+          let currentCommon = { ...commonAttributes };
+
+          for (let j = i + 1; j < run.length; j++) {
+            if (grouped.has(run[j])) break;
+
+            const nextAttributes = this.getGroupableAttributes(run[j], groupableAttributes);
+            currentCommon = this.intersectGroupableAttributes(currentCommon, nextAttributes);
+            if (Object.keys(currentCommon).length === 0) break;
+
+            const count = j - i + 1;
+            const savings = this.estimateGroupSavings(currentCommon, count);
+            if (savings > 0 && (!bestGroup || savings > bestGroup.savings)) {
+              bestGroup = { end: j, attrs: { ...currentCommon }, savings };
+            }
+          }
+
+          if (bestGroup) {
+            const SVG_NS = 'http://www.w3.org/2000/svg';
+            const elementsToGroup = run.slice(i, bestGroup.end + 1);
+            const group = parent.ownerDocument.createElementNS(SVG_NS, 'g');
+
+            Object.entries(bestGroup.attrs).forEach(([attr, value]) => {
               group.setAttribute(attr, value);
             });
 
-            // Find a common parent for all elements in this group
-            let commonParent = elements[0].parentNode;
+            parent.insertBefore(group, elementsToGroup[0]);
 
-            // Simple approach: use the parent of the first element
-            // Insert the group before the first element
-            commonParent.insertBefore(group, elements[0]);
-
-            // Move elements to the group and remove their common attributes
-            elements.forEach(el => {
-              // Remove the common attributes from the element
-              Object.keys(attributes).forEach(attr => {
+            elementsToGroup.forEach(el => {
+              Object.keys(bestGroup.attrs).forEach(attr => {
                 el.removeAttribute(attr);
               });
-
-              // Move element to the group
               group.appendChild(el);
+              grouped.add(el);
             });
+
+            i = bestGroup.end + 1;
+          } else {
+            i++;
           }
+        }
+      }
+
+      groupElementsByCommonAttributes(doc, tagNames, groupableAttributes) {
+        const tagSet = new Set(tagNames.map(name => name.toLowerCase()));
+        const parents = new Set();
+
+        doc.querySelectorAll(tagNames.join(',')).forEach(el => {
+          if (el.parentElement) parents.add(el.parentElement);
         });
 
-        return new XMLSerializer().serializeToString(doc);
+        parents.forEach(parent => {
+          const children = Array.from(parent.children);
+          let i = 0;
+
+          while (i < children.length) {
+            const child = children[i];
+            const childTag = child.tagName.toLowerCase();
+            if (!tagSet.has(childTag)) {
+              i++;
+              continue;
+            }
+
+            const tagName = childTag;
+            let runEnd = i;
+            while (runEnd + 1 < children.length && children[runEnd + 1].tagName.toLowerCase() === tagName) {
+              runEnd++;
+            }
+
+            const run = children.slice(i, runEnd + 1);
+            this.groupRunByAttributes(parent, run, groupableAttributes);
+            i = runEnd + 1;
+          }
+        });
       }
 
       groupSimilarElementsByType(svg) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(svg, 'image/svg+xml');
-        const SVG_NS = 'http://www.w3.org/2000/svg';
 
         // Process different element types separately
         const elementTypes = ['path', 'circle', 'ellipse', 'rect', 'line', 'polyline', 'polygon'];
 
-        elementTypes.forEach(tagName => {
-          const elements = Array.from(doc.querySelectorAll(tagName));
-          if (elements.length < 2) return;
+        // Attributes that make sense to group for these element types
+        const groupableAttributes = [
+          'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+          'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
+          'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity'
+        ];
 
-          // Attributes that make sense to group for this element type
-          const groupableAttributes = [
-            'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
-            'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
-            'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity'
-          ];
-
-          // Count frequency of each attribute-value pair
-          const attributeValueCounts = new Map();
-
-          elements.forEach(el => {
-            groupableAttributes.forEach(attr => {
-              const value = el.getAttribute(attr);
-              if (value) {
-                const key = `${attr}:${value}`;
-                attributeValueCounts.set(key, (attributeValueCounts.get(key) || 0) + 1);
-              }
-            });
-          });
-
-          // Find attribute-value pairs that appear in 2+ elements
-          const commonAttributeValues = new Map();
-          attributeValueCounts.forEach((count, key) => {
-            if (count >= 2) {
-              const [attr, value] = key.split(':', 2);
-              if (!commonAttributeValues.has(attr)) {
-                commonAttributeValues.set(attr, new Map());
-              }
-              commonAttributeValues.get(attr).set(value, count);
-            }
-          });
-
-          // For each attribute, find the most common value
-          const mostCommonAttributes = {};
-          commonAttributeValues.forEach((valueCounts, attr) => {
-            let maxCount = 0;
-            let mostCommonValue = null;
-            valueCounts.forEach((count, value) => {
-              if (count > maxCount) {
-                maxCount = count;
-                mostCommonValue = value;
-              }
-            });
-            if (maxCount >= 2) {
-              mostCommonAttributes[attr] = mostCommonValue;
-            }
-          });
-
-          // If we have common attributes, create a group
-          if (Object.keys(mostCommonAttributes).length > 0) {
-            // Find elements that have these common attributes (they may have additional attributes)
-            const elementsToGroup = elements.filter(el => {
-              return Object.entries(mostCommonAttributes).every(([attr, value]) => {
-                return el.getAttribute(attr) === value;
-              });
-            });
-
-            if (elementsToGroup.length >= 2) {
-              // Calculate if grouping saves space
-              const attributeCount = Object.keys(mostCommonAttributes).length;
-              const groupOverhead = 7; // <g></g> overhead
-              const avgAttrSize = 15; // Average attribute size
-              const savings = (elementsToGroup.length - 1) * attributeCount * avgAttrSize - groupOverhead;
-
-              if (savings > 0) {
-                // Create a group element
-                const group = doc.createElementNS(SVG_NS, 'g');
-
-                // Add common attributes to the group
-                Object.entries(mostCommonAttributes).forEach(([attr, value]) => {
-                  group.setAttribute(attr, value);
-                });
-
-                // Find a common parent for all elements in this group
-                let commonParent = elementsToGroup[0].parentNode;
-
-                // Insert the group before the first element
-                commonParent.insertBefore(group, elementsToGroup[0]);
-
-                // Move elements to the group and remove their common attributes
-                elementsToGroup.forEach(el => {
-                  // Remove only the common attributes from the element (keep unique ones)
-                  Object.keys(mostCommonAttributes).forEach(attr => {
-                    el.removeAttribute(attr);
-                  });
-
-                  // Move element to the group
-                  group.appendChild(el);
-                });
-              }
-            }
-          }
-        });
+        this.groupElementsByCommonAttributes(doc, elementTypes, groupableAttributes);
 
         return new XMLSerializer().serializeToString(doc);
       }
@@ -1655,12 +1821,19 @@
           return;
         }
         const parser = new DOMParser();
-        // Use optimizedSvg for tree view if available, otherwise fall back to originalSvg
-        const svgToParse = this.optimizedSvg || this.originalSvg;
+        // Tree view reflects the editable source SVG
+        const svgToParse = this.originalSvg || this.optimizedSvg;
         this.options.treeDoc = parser.parseFromString(svgToParse, 'image/svg+xml');
       }
 
       async optimizeSvg() {
+        if (this.editor && !this.options.isUpdatingFromTree) {
+          const current = this.editor.getValue();
+          if (current !== this.originalSvg) {
+            this.originalSvg = current;
+          }
+        }
+
         if (!this.originalSvg.trim()) {
           this.optimizedSvg = '';
           return;
@@ -1668,6 +1841,8 @@
 
         try {
           let svg = this.originalSvg;
+          const preservedResult = this.injectPreserveMarkers(svg);
+          svg = preservedResult.svg;
 
           // Convert sodipodi arcs BEFORE SVGO to prevent removal
           if (this.options.convertSodipodiArcs) {
@@ -1696,9 +1871,15 @@
               'convertColors',
               'convertPathData',
               'convertTransform',
-              'removeUnknownsAndDefaults',
+              {
+                name: 'removeUnknownsAndDefaults',
+                params: {
+                  keepDataAttrs: true,
+                  keepAriaAttrs: true,
+                  keepRoleAttr: true
+                }
+              },
               'removeNonInheritableGroupAttrs',
-              'removeUselessStrokeAndFill',
               'removeUnusedNS',
               'cleanupIds',
               'cleanupNumericValues',
@@ -1758,6 +1939,8 @@
           if (this.options.useCustomDimensions) {
             svg = this.resizeSvg(svg, this.options.customWidth, this.options.customHeight);
           }
+
+          svg = this.restorePreservedAttributes(svg, preservedResult.preserved);
 
           this.optimizedSvg = svg;
         } catch (error) {
@@ -1897,6 +2080,95 @@
     let dragSourcePath = null;
     let dragOverPath = null;
 
+    const COMMON_ATTRIBUTE_SUGGESTIONS = [
+      'id', 'class', 'style', 'transform', 'opacity', 'display', 'visibility',
+      'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
+      'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
+      'stroke-opacity', 'clip-path', 'mask', 'filter', 'vector-effect',
+      'shape-rendering', 'paint-order', 'pointer-events'
+    ];
+
+    const ATTRIBUTE_SUGGESTIONS_BY_TAG = {
+      svg: ['width', 'height', 'viewBox', 'preserveAspectRatio'],
+      g: ['transform', 'opacity'],
+      path: ['d', 'pathLength'],
+      rect: ['x', 'y', 'width', 'height', 'rx', 'ry'],
+      circle: ['cx', 'cy', 'r'],
+      ellipse: ['cx', 'cy', 'rx', 'ry'],
+      line: ['x1', 'y1', 'x2', 'y2'],
+      polyline: ['points'],
+      polygon: ['points'],
+      text: ['x', 'y', 'dx', 'dy', 'text-anchor', 'dominant-baseline', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'word-spacing'],
+      tspan: ['x', 'y', 'dx', 'dy', 'text-anchor', 'dominant-baseline', 'font-family', 'font-size', 'font-weight', 'font-style', 'letter-spacing', 'word-spacing'],
+      image: ['href', 'x', 'y', 'width', 'height', 'preserveAspectRatio'],
+      use: ['href', 'x', 'y', 'width', 'height'],
+      stop: ['offset', 'stop-color', 'stop-opacity'],
+      lineargradient: ['x1', 'y1', 'x2', 'y2', 'gradientUnits', 'gradientTransform'],
+      radialgradient: ['cx', 'cy', 'r', 'fx', 'fy', 'gradientUnits', 'gradientTransform'],
+      clippath: ['clipPathUnits'],
+      mask: ['maskUnits', 'maskContentUnits', 'x', 'y', 'width', 'height'],
+      pattern: ['patternUnits', 'patternContentUnits', 'x', 'y', 'width', 'height', 'patternTransform'],
+      marker: ['markerWidth', 'markerHeight', 'refX', 'refY', 'orient', 'markerUnits', 'viewBox', 'preserveAspectRatio'],
+      symbol: ['viewBox', 'preserveAspectRatio']
+    };
+
+    const attributeDialogState = {
+      isOpen: false,
+      path: null,
+      tagName: '',
+      name: '',
+      value: '',
+      suggestions: []
+    };
+
+    function getAttributeSuggestionsForElement(element) {
+      const tagName = element.tagName.toLowerCase();
+      const specific = ATTRIBUTE_SUGGESTIONS_BY_TAG[tagName] || [];
+      const existing = Array.from(element.attributes).map(attr => attr.name);
+      const merged = [...existing, ...specific, ...COMMON_ATTRIBUTE_SUGGESTIONS];
+      return Array.from(new Set(merged));
+    }
+
+    function openAttributeDialog(path) {
+      const doc = optimizer.options.treeDoc;
+      const element = getElementByPath(doc, path);
+      if (!element) return;
+
+      attributeDialogState.isOpen = true;
+      attributeDialogState.path = path;
+      attributeDialogState.tagName = element.tagName.toLowerCase();
+      attributeDialogState.name = '';
+      attributeDialogState.value = '';
+      attributeDialogState.suggestions = getAttributeSuggestionsForElement(element);
+      m.redraw();
+    }
+
+    function closeAttributeDialog() {
+      attributeDialogState.isOpen = false;
+      attributeDialogState.path = null;
+      attributeDialogState.tagName = '';
+      attributeDialogState.name = '';
+      attributeDialogState.value = '';
+      attributeDialogState.suggestions = [];
+      m.redraw();
+    }
+
+    function applyAttributeDialog() {
+      const name = attributeDialogState.name.trim();
+      if (!name) return;
+
+      const doc = optimizer.options.treeDoc;
+      const element = getElementByPath(doc, attributeDialogState.path);
+      if (!element) {
+        closeAttributeDialog();
+        return;
+      }
+
+      element.setAttribute(name, attributeDialogState.value);
+      updateFromTree(doc);
+      closeAttributeDialog();
+    }
+
     // Uncontrolled Input Component to prevent Mithril redraws from interfering with typing
     const UncontrolledInput = {
       oncreate({ dom, attrs }) {
@@ -2010,10 +2282,25 @@
                       }
                     }),
                     attr.value.length > 50 && m('.attr-value-full', attr.value)
-                  ])
+                  ]),
+                  m('button.attr-remove', {
+                    title: `Remove ${attr.name}`,
+                    onclick: (e) => {
+                      e.stopPropagation();
+                      node.removeAttribute(attr.name);
+                      updateFromTree(node.ownerDocument);
+                    }
+                  }, '×')
                 ])
               )),
               m('.node-controls', [
+                m('button.control-btn', {
+                  title: 'Add attribute',
+                  onclick: (e) => {
+                    e.stopPropagation();
+                    openAttributeDialog(path);
+                  }
+                }, '+'),
 
                 // ⭕ round-to-zero button (only if useful)
                 isSelected && hasRoundableAttrs(node) && m('button.control-btn', {
@@ -2113,6 +2400,8 @@
         optimizer.editor.setValue(optimizer.originalSvg);
       }
       optimizer.optimizeSvg();
+      optimizer.updateTreeDoc();
+      optimizer.saveToHistory();
       optimizer.options.isUpdatingFromTree = false;
       m.redraw();
     }
@@ -2289,8 +2578,9 @@
 
       view() {
         const stats = optimizer.getStats();
+        const isCopied = optimizer.copyStatus === 'copied';
 
-        return m('div', [
+        const body = [
           m('.header', [
             m('.title', [
               m('img.logo', { src: 'logo.svg', alt: 'Logo' }),
@@ -2582,11 +2872,15 @@
                       onclick: () => copyToClipboard(),
                       title: 'Copy to clipboard'
                     }, [
-                      m('svg[width=16][height=16][viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2][stroke-linecap=round][stroke-linejoin=round]', [
-                        m('path[stroke-linecap=round][stroke-linejoin=round][d=M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"]'),
-                        m('path[stroke-linecap=round][stroke-linejoin=round][d=M16 8v8m-4-5v5m-4-2v2"]')
-                      ]),
-                      m('span', 'Copy')
+                      isCopied
+                        ? m('svg[width=16][height=16][viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2][stroke-linecap=round][stroke-linejoin=round]', [
+                          m('path[stroke-linecap=round][stroke-linejoin=round][d=M20 6L9 17l-5-5"]')
+                        ])
+                        : m('svg[width=16][height=16][viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2][stroke-linecap=round][stroke-linejoin=round]', [
+                          m('path[stroke-linecap=round][stroke-linejoin=round][d=M8 16H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2m-6 12h8a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2z"]'),
+                          m('path[stroke-linecap=round][stroke-linejoin=round][d=M16 8v8m-4-5v5m-4-2v2"]')
+                        ]),
+                      m('span', isCopied ? 'Copied!' : 'Copy')
                     ])
                   ])
                 ]),
@@ -2623,7 +2917,80 @@
               ])
             ])
           ])
-        ]);
+        ];
+
+        if (attributeDialogState.isOpen) {
+          body.push(
+            m('.attr-dialog-backdrop', {
+              onclick: (e) => {
+                if (e.target === e.currentTarget) closeAttributeDialog();
+              }
+            }, [
+              m('.attr-dialog', {
+                onclick: (e) => e.stopPropagation()
+              }, [
+                m('.attr-dialog-title', `Add attribute to <${attributeDialogState.tagName}>`),
+                m('.field', [
+                  m('label', 'Attribute'),
+                  m('input#attr-name-input', {
+                    list: 'attr-suggestions',
+                    value: attributeDialogState.name,
+                    oncreate: ({ dom }) => dom.focus(),
+                    oninput: (e) => {
+                      attributeDialogState.name = e.target.value;
+                      const doc = optimizer.options.treeDoc;
+                      const element = getElementByPath(doc, attributeDialogState.path);
+                      if (element) {
+                        const existingValue = element.getAttribute(attributeDialogState.name.trim());
+                        if (existingValue !== null && attributeDialogState.value === '') {
+                          attributeDialogState.value = existingValue;
+                        }
+                      }
+                    },
+                    onkeydown: (e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeAttributeDialog();
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        applyAttributeDialog();
+                      }
+                    }
+                  })
+                ]),
+                m('datalist#attr-suggestions', attributeDialogState.suggestions.map(attr =>
+                  m('option', { value: attr })
+                )),
+                m('.field', [
+                  m('label', 'Value'),
+                  m('input', {
+                    value: attributeDialogState.value,
+                    oninput: (e) => {
+                      attributeDialogState.value = e.target.value;
+                    },
+                    onkeydown: (e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeAttributeDialog();
+                      }
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        applyAttributeDialog();
+                      }
+                    }
+                  })
+                ]),
+                m('.actions', [
+                  m('button.btn', { onclick: () => closeAttributeDialog() }, 'Cancel'),
+                  m('button.btn.primary', { onclick: () => applyAttributeDialog() }, 'Add')
+                ])
+              ])
+            ])
+          );
+        }
+
+        return m('div', body);
       }
     };
 
@@ -2702,20 +3069,16 @@
       }
 
       navigator.clipboard.writeText(optimizer.originalSvg).then(() => {
-        // Show a temporary success message
-        const copyBtn = document.querySelector('button[title="Copy to clipboard"]');
-        if (copyBtn) {
-          const originalText = copyBtn.innerHTML;
-          copyBtn.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M20 6L9 17l-5-5"/>
-            </svg>
-            <span>Copied!</span>
-          `;
-          setTimeout(() => {
-            copyBtn.innerHTML = originalText;
-          }, 2000);
+        optimizer.copyStatus = 'copied';
+        if (optimizer.copyResetTimer) {
+          clearTimeout(optimizer.copyResetTimer);
         }
+        optimizer.copyResetTimer = setTimeout(() => {
+          optimizer.copyStatus = 'idle';
+          optimizer.copyResetTimer = null;
+          m.redraw();
+        }, 2000);
+        m.redraw();
       }).catch(err => {
         console.error('Failed to copy:', err);
         alert('Failed to copy to clipboard');
@@ -2723,8 +3086,26 @@
     }
 
     document.addEventListener('keydown', (e) => {
-      // Don't pan if typing in an input or textarea
+      // Don't pan or hijack shortcuts if typing or inside the code editor
       if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
+      if (e.target.closest && e.target.closest('#editor')) return;
+
+      const isMac = navigator.platform.toUpperCase().includes('MAC');
+      const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+      if (modKey && !e.shiftKey && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        optimizer.undo();
+        m.redraw();
+        return;
+      }
+
+      if (modKey && (e.key.toLowerCase() === 'y' || (e.shiftKey && e.key.toLowerCase() === 'z'))) {
+        e.preventDefault();
+        optimizer.redo();
+        m.redraw();
+        return;
+      }
 
       const step = 20;
       const zoomStep = 1.1;
