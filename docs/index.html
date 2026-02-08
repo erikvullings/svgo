@@ -698,6 +698,20 @@
       'r', 'rx', 'ry'
     ]);
 
+    const NUMERIC_ATTRS = new Set([
+      'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy',
+      'r', 'rx', 'ry', 'width', 'height',
+      'dx', 'dy', 'font-size', 'stroke-width',
+      'opacity', 'fill-opacity', 'stroke-opacity',
+      'stroke-dashoffset', 'stroke-miterlimit',
+      'letter-spacing', 'word-spacing',
+      'pathlength'
+    ]);
+
+    const NUMERIC_LIST_ATTRS = new Set([
+      'viewbox', 'points', 'stroke-dasharray'
+    ]);
+
     const KNOWN_SVG_ATTRS = new Set([
       'id', 'class', 'style', 'transform', 'opacity', 'display', 'visibility',
       'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
@@ -794,6 +808,227 @@
       Array.from(node.children).forEach(roundAttrsRecursive);
     }
 
+    function roundNumericValue(value, precision) {
+      const num = parseFloat(value);
+      if (!Number.isFinite(num)) return value;
+
+      const absNum = Math.abs(num);
+      let dynamicPrecision = precision;
+
+      if (absNum >= 100) {
+        dynamicPrecision = Math.max(0, precision - 2);
+      } else if (absNum >= 10) {
+        dynamicPrecision = Math.max(0, precision - 1);
+      } else if (absNum >= 1) {
+        dynamicPrecision = precision;
+      } else {
+        dynamicPrecision = Math.min(precision + 1, 5);
+      }
+
+      if (dynamicPrecision === 0) {
+        return formatNumberCompact(Math.round(num));
+      }
+
+      const rounded = parseFloat(num.toFixed(dynamicPrecision));
+      return formatNumberCompact(rounded);
+    }
+
+    function formatNumberCompact(num) {
+      if (!Number.isFinite(num)) return String(num);
+      if (num === 0) return '0';
+      let result = num.toString();
+      if (result.startsWith('0.')) {
+        result = result.substring(1);
+      } else if (result.startsWith('-0.')) {
+        result = '-' + result.substring(2);
+      }
+      return result;
+    }
+
+    function roundNumericList(value, precision) {
+      return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
+        roundNumericValue(match, precision)
+      );
+    }
+
+    function roundPathData(value, precision) {
+      return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
+        roundNumericValue(match, precision)
+      );
+    }
+
+    function applyTranslateToPoints(value, dx, dy) {
+      const parts = value.trim().split(/[\s,]+/).map(Number);
+      if (parts.length < 2) return value;
+      const result = [];
+      for (let i = 0; i < parts.length; i += 2) {
+        const x = parts[i];
+        const y = parts[i + 1];
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return value;
+        result.push(formatNumberCompact(x + dx), formatNumberCompact(y + dy));
+      }
+      return result.join(' ');
+    }
+
+    function translatePathData(pathData, dx, dy) {
+      const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      temp.setAttribute('d', pathData);
+      if (!temp.getPathData) return null;
+
+      let segments;
+      try {
+        segments = temp.getPathData({ normalize: true });
+      } catch (e) {
+        try {
+          segments = temp.getPathData();
+        } catch (err) {
+          return null;
+        }
+      }
+      segments.forEach(seg => {
+        switch (seg.type) {
+          case 'M':
+          case 'L':
+          case 'T':
+            seg.values[0] += dx;
+            seg.values[1] += dy;
+            break;
+          case 'H':
+            seg.values[0] += dx;
+            break;
+          case 'V':
+            seg.values[0] += dy;
+            break;
+          case 'C':
+            seg.values[0] += dx;
+            seg.values[1] += dy;
+            seg.values[2] += dx;
+            seg.values[3] += dy;
+            seg.values[4] += dx;
+            seg.values[5] += dy;
+            break;
+          case 'S':
+          case 'Q':
+            seg.values[0] += dx;
+            seg.values[1] += dy;
+            seg.values[2] += dx;
+            seg.values[3] += dy;
+            break;
+          case 'A':
+            seg.values[5] += dx;
+            seg.values[6] += dy;
+            break;
+          default:
+            break;
+        }
+      });
+
+      return segments.map(seg => {
+        const values = seg.values.length ? seg.values.join(' ') : '';
+        return `${seg.type}${values ? ' ' + values : ''}`;
+      }).join(' ');
+    }
+
+    function collapseTransforms(svg) {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(svg, 'image/svg+xml');
+      const svgEl = doc.querySelector('svg');
+      if (!svgEl) return svg;
+
+      function canTranslate(el) {
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'g' || tag === 'svg') {
+          return Array.from(el.children).every(child => canTranslate(child));
+        }
+        if (tag === 'path') {
+          const d = el.getAttribute('d');
+          if (!d) return true;
+          const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          return typeof temp.getPathData === 'function';
+        }
+        return true;
+      }
+
+      function applyTranslate(el, dx, dy) {
+        if (dx === 0 && dy === 0) return true;
+
+        const tag = el.tagName.toLowerCase();
+        if (tag === 'g' || tag === 'svg') {
+          if (!canTranslate(el)) return false;
+          Array.from(el.children).forEach(child => {
+            applyTranslate(child, dx, dy);
+          });
+          return true;
+        }
+
+        if (tag === 'path') {
+          const d = el.getAttribute('d');
+          if (d) {
+            const translated = translatePathData(d, dx, dy);
+            if (translated) {
+              el.setAttribute('d', translated);
+            } else {
+              // Can't translate path reliably without path data API
+              return false;
+            }
+          }
+        }
+
+        if (el.hasAttribute('points')) {
+          const points = el.getAttribute('points');
+          const translated = applyTranslateToPoints(points, dx, dy);
+          el.setAttribute('points', translated);
+        }
+
+        const xAttrs = ['x', 'x1', 'x2', 'cx'];
+        const yAttrs = ['y', 'y1', 'y2', 'cy'];
+
+        xAttrs.forEach(attr => {
+          if (el.hasAttribute(attr)) {
+            const val = parseFloat(el.getAttribute(attr));
+            if (Number.isFinite(val)) {
+              el.setAttribute(attr, formatNumberCompact(val + dx));
+            }
+          }
+        });
+
+        yAttrs.forEach(attr => {
+          if (el.hasAttribute(attr)) {
+            const val = parseFloat(el.getAttribute(attr));
+            if (Number.isFinite(val)) {
+              el.setAttribute(attr, formatNumberCompact(val + dy));
+            }
+          }
+        });
+
+        for (const child of Array.from(el.children)) {
+          if (!applyTranslate(child, dx, dy)) return false;
+        }
+        return true;
+      }
+
+      Array.from(doc.querySelectorAll('[transform]')).forEach(el => {
+        const transform = el.getAttribute('transform');
+        if (!transform) return;
+        const extracted = extractTranslate(transform);
+        let applied = true;
+        if (extracted.dx || extracted.dy) {
+          applied = applyTranslate(el, extracted.dx, extracted.dy);
+        }
+        if (applied) {
+          if (extracted.rest) {
+            el.setAttribute('transform', extracted.rest);
+          } else {
+            el.removeAttribute('transform');
+          }
+        } else {
+          el.setAttribute('transform', transform);
+        }
+      });
+
+      return new XMLSerializer().serializeToString(doc);
+    }
+
 
     // TypeScript-like implementation in JavaScript
     class SVGOptimizer {
@@ -806,6 +1041,7 @@
         this.maxHistory = 20; // Maximum number of history entries
         this.options = {
           precision: 1,
+          pathPrecision: 2,
           removeTspan: true,
           removeStyling: true,
           removeGroups: false,
@@ -1020,51 +1256,31 @@
       }
 
       roundNumbers(str, precision) {
-        // Updated regex to also match numbers starting with a decimal point (e.g., .1234)
-        return str.replace(/(-?\d*\.\d+)/g, (match) => {
-          const num = parseFloat(match);
-          const absNum = Math.abs(num);
-          let dynamicPrecision = precision;
+        return this.roundNumbersWithPrecision(str, precision, precision);
+      }
 
-          // Dynamic precision based on number magnitude
-          if (absNum >= 100) {
-            // Large numbers (≥100): can be rounded more aggressively
-            dynamicPrecision = Math.max(0, precision - 2);
-          } else if (absNum >= 10) {
-            // Medium numbers (10-99): round slightly more aggressively
-            dynamicPrecision = Math.max(0, precision - 1);
-          } else if (absNum >= 1) {
-            // Numbers 1-9: use normal precision
-            dynamicPrecision = precision;
-          } else {
-            // Small numbers (<1): preserve more precision to avoid visual impact
-            dynamicPrecision = Math.min(precision + 1, 5);
-          }
+      roundNumbersWithPrecision(svg, attrPrecision, pathPrecision) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
 
-          let rounded;
-
-          if (dynamicPrecision === 0) {
-            rounded = Math.round(num);
-          } else {
-            rounded = parseFloat(num.toFixed(dynamicPrecision));
-
-            // If rounding would make the number zero, try with one more decimal place
-            if (rounded === 0 && num !== 0) {
-              rounded = parseFloat(num.toFixed(dynamicPrecision + 1));
+        doc.querySelectorAll('*').forEach(el => {
+          Array.from(el.attributes).forEach(attr => {
+            const name = attr.name.toLowerCase();
+            if (name === 'd') {
+              attr.value = roundPathData(attr.value, pathPrecision);
+              return;
             }
-          }
-
-          let result = rounded.toString();
-
-          // Remove leading zero for numbers between -1 and 1 (e.g., 0.5 -> .5, -0.3 -> -.3)
-          if (result.startsWith('0.')) {
-            result = result.substring(1);
-          } else if (result.startsWith('-0.')) {
-            result = '-' + result.substring(2);
-          }
-
-          return result;
+            if (NUMERIC_ATTRS.has(name)) {
+              attr.value = roundNumericValue(attr.value, attrPrecision);
+              return;
+            }
+            if (NUMERIC_LIST_ATTRS.has(name)) {
+              attr.value = roundNumericList(attr.value, attrPrecision);
+            }
+          });
         });
+
+        return new XMLSerializer().serializeToString(doc);
       }
 
       removeTspanElements(svg) {
@@ -1868,9 +2084,7 @@
               'removeViewBox',
               'cleanupEnableBackground',
               'convertStyleToAttrs',
-              'convertColors',
               'convertPathData',
-              'convertTransform',
               {
                 name: 'removeUnknownsAndDefaults',
                 params: {
@@ -1898,7 +2112,10 @@
 
           // Apply custom optimizations
           if (this.options.precision >= 0) {
-            svg = this.roundNumbers(svg, this.options.precision);
+            svg = collapseTransforms(svg);
+            svg = this.roundNumbersWithPrecision(svg, this.options.precision, this.options.pathPrecision);
+          } else {
+            svg = collapseTransforms(svg);
           }
 
           if (this.options.removeDefaultValues) {
@@ -1942,7 +2159,9 @@
 
           svg = this.restorePreservedAttributes(svg, preservedResult.preserved);
 
-          this.optimizedSvg = svg;
+          const originalSize = new Blob([this.originalSvg]).size;
+          const optimizedSize = new Blob([svg]).size;
+          this.optimizedSvg = optimizedSize <= originalSize ? svg : this.originalSvg;
         } catch (error) {
           console.error('Optimization error:', error);
           this.optimizedSvg = `<!-- Error optimizing SVG: ${error.message} -->\n${this.originalSvg}`;
@@ -2654,6 +2873,20 @@
                   max: 5,
                   onchange: (e) => {
                     optimizer.options.precision = parseInt(e.target.value);
+                    optimizer.optimizeSvg();
+                    optimizer.saveToHistory();
+                  }
+                }),
+              ]),
+
+              m('.checkbox-group', [
+                m('label', 'Path precision:'),
+                m('input.number-input[type=number]', {
+                  value: optimizer.options.pathPrecision,
+                  min: 0,
+                  max: 5,
+                  onchange: (e) => {
+                    optimizer.options.pathPrecision = parseInt(e.target.value);
                     optimizer.optimizeSvg();
                     optimizer.saveToHistory();
                   }
