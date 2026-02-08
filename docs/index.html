@@ -1321,6 +1321,24 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      removeUnusedXlinkNamespace(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const root = doc.querySelector('svg');
+        if (!root) return svg;
+
+        const hasXlinkHref = doc.querySelector('[xlink\\:href]');
+        const hasHref = doc.querySelector('[href]');
+        if (!hasXlinkHref && hasHref) {
+          root.removeAttribute('xmlns:xlink');
+        }
+        if (!hasXlinkHref && !hasHref) {
+          root.removeAttribute('xmlns:xlink');
+        }
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
       removeGroups(svg) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(svg, 'image/svg+xml');
@@ -2152,6 +2170,9 @@
 
           // Group text elements by common attributes (always enabled for text optimization)
           svg = this.groupTextByAttributes(svg);
+
+          // Remove unused xlink namespace if possible
+          svg = this.removeUnusedXlinkNamespace(svg);
 
           if (this.options.useCustomDimensions) {
             svg = this.resizeSvg(svg, this.options.customWidth, this.options.customHeight);
