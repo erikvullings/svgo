@@ -729,6 +729,7 @@
       'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'markerunits',
       'patternunits', 'patterncontentunits', 'patterntransform',
       'maskunits', 'maskcontentunits', 'clippathunits',
+      'version', 'baseprofile',
       'xmlns', 'xmlns:xlink', 'xml:space'
     ]);
 
@@ -833,6 +834,14 @@
       return formatNumberCompact(rounded);
     }
 
+    function roundNumericValueFixed(value, precision) {
+      const num = parseFloat(value);
+      if (!Number.isFinite(num)) return value;
+      if (precision === 0) return formatNumberCompact(Math.round(num));
+      const rounded = parseFloat(num.toFixed(precision));
+      return formatNumberCompact(rounded);
+    }
+
     function formatNumberCompact(num) {
       if (!Number.isFinite(num)) return String(num);
       if (num === 0) return '0';
@@ -847,13 +856,13 @@
 
     function roundNumericList(value, precision) {
       return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
-        roundNumericValue(match, precision)
+        roundNumericValueFixed(match, precision)
       );
     }
 
     function roundPathData(value, precision) {
       return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
-        roundNumericValue(match, precision)
+        roundNumericValueFixed(match, precision)
       );
     }
 
@@ -1271,7 +1280,7 @@
               return;
             }
             if (NUMERIC_ATTRS.has(name)) {
-              attr.value = roundNumericValue(attr.value, attrPrecision);
+              attr.value = roundNumericValueFixed(attr.value, attrPrecision);
               return;
             }
             if (NUMERIC_LIST_ATTRS.has(name)) {
@@ -1339,6 +1348,29 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      removeSvgRootDefaults(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const root = doc.querySelector('svg') || doc.documentElement;
+        if (!root) return svg;
+
+        const defaults = {
+          version: '1.1',
+          baseProfile: 'full',
+          preserveAspectRatio: 'xMidYMid meet'
+        };
+
+        Object.entries(defaults).forEach(([attr, value]) => {
+          const current = root.getAttribute(attr);
+          if (!current) return;
+          if (current.trim() === value) {
+            root.removeAttribute(attr);
+          }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
       removeGroups(svg) {
         const parser = new DOMParser();
         const doc = parser.parseFromString(svg, 'image/svg+xml');
@@ -1354,6 +1386,53 @@
             }
             parent.removeChild(group);
           }
+        });
+
+        return new XMLSerializer().serializeToString(doc);
+      }
+
+      mergePathsAndCollapseGroups(svg) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+
+        const mergeableGroupAttrs = new Set([
+          'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
+          'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
+          'fill-rule', 'opacity', 'fill-opacity', 'stroke-opacity',
+          'clip-path', 'mask', 'filter', 'vector-effect', 'paint-order',
+          'shape-rendering', 'text-rendering'
+        ]);
+
+        function isPresentationAttr(name) {
+          return mergeableGroupAttrs.has(name);
+        }
+
+        // Collapse groups with a single child by moving presentation attrs to child
+        const groupsToCollapse = Array.from(doc.querySelectorAll('g'));
+        groupsToCollapse.forEach(group => {
+          const hasNonWhitespaceText = Array.from(group.childNodes).some(node => {
+            return node.nodeType === 3 && node.textContent.trim() !== '';
+          });
+          if (hasNonWhitespaceText) return;
+
+          if (group.hasAttribute('transform')) return;
+
+          const hasNonPresentationAttrs = Array.from(group.attributes).some(attr => !isPresentationAttr(attr.name));
+          if (hasNonPresentationAttrs) return;
+
+          const children = Array.from(group.children);
+          if (children.length !== 1) return;
+          const child = children[0];
+
+          Array.from(group.attributes).forEach(attr => {
+            if (!isPresentationAttr(attr.name)) return;
+            if (!child.hasAttribute(attr.name)) {
+              child.setAttribute(attr.name, attr.value);
+            }
+          });
+
+          group.parentElement.insertBefore(child, group);
+          group.remove();
         });
 
         return new XMLSerializer().serializeToString(doc);
@@ -1941,6 +2020,10 @@
           return svg;
         }
 
+        if (!Number.isFinite(newWidth) || !Number.isFinite(newHeight)) {
+          return svg;
+        }
+
         const contentBBox = this.calculateContentBBox(svg);
 
         let finalViewBoxX, finalViewBoxY, finalViewBoxWidth, finalViewBoxHeight;
@@ -2171,8 +2254,14 @@
           // Group text elements by common attributes (always enabled for text optimization)
           svg = this.groupTextByAttributes(svg);
 
+          // Merge simple path-only groups and collapse groups with a single child
+          svg = this.mergePathsAndCollapseGroups(svg);
+
           // Remove unused xlink namespace if possible
           svg = this.removeUnusedXlinkNamespace(svg);
+
+          // Remove default root attributes like version="1.1"
+          svg = this.removeSvgRootDefaults(svg);
 
           if (this.options.useCustomDimensions) {
             svg = this.resizeSvg(svg, this.options.customWidth, this.options.customHeight);
@@ -2180,9 +2269,7 @@
 
           svg = this.restorePreservedAttributes(svg, preservedResult.preserved);
 
-          const originalSize = new Blob([this.originalSvg]).size;
-          const optimizedSize = new Blob([svg]).size;
-          this.optimizedSvg = optimizedSize <= originalSize ? svg : this.originalSvg;
+          this.optimizedSvg = svg;
         } catch (error) {
           console.error('Optimization error:', error);
           this.optimizedSvg = `<!-- Error optimizing SVG: ${error.message} -->\n${this.originalSvg}`;
