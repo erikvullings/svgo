@@ -882,7 +882,9 @@
     function translatePathData(pathData, dx, dy) {
       const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
       temp.setAttribute('d', pathData);
-      if (!temp.getPathData) return null;
+      if (!temp.getPathData) {
+        return translatePathDataFallback(pathData, dx, dy);
+      }
 
       let segments;
       try {
@@ -891,7 +893,7 @@
         try {
           segments = temp.getPathData();
         } catch (err) {
-          return null;
+          return translatePathDataFallback(pathData, dx, dy);
         }
       }
       segments.forEach(seg => {
@@ -938,25 +940,279 @@
       }).join(' ');
     }
 
+    function translatePathDataFallback(pathData, dx, dy) {
+      const tokenRe = /([a-zA-Z])|([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/g;
+      const tokens = [];
+      let match;
+      while ((match = tokenRe.exec(pathData)) !== null) {
+        if (match[1]) {
+          tokens.push({ type: 'cmd', value: match[1] });
+        } else {
+          tokens.push({ type: 'num', value: match[2] });
+        }
+      }
+
+      if (tokens.length === 0) return null;
+
+      const paramCounts = {
+        m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0
+      };
+
+      let i = 0;
+      let cmd = null;
+      let firstCommand = true;
+      let currentX = 0;
+      let currentY = 0;
+      let subStartX = 0;
+      let subStartY = 0;
+      const out = [];
+
+      function readNumbers() {
+        const nums = [];
+        while (i < tokens.length && tokens[i].type === 'num') {
+          nums.push(parseFloat(tokens[i].value));
+          i += 1;
+        }
+        return nums;
+      }
+
+      while (i < tokens.length) {
+        if (tokens[i].type === 'cmd') {
+          cmd = tokens[i].value;
+          i += 1;
+        } else if (!cmd) {
+          return null;
+        }
+
+        const lower = cmd.toLowerCase();
+        const isAbs = cmd === cmd.toUpperCase();
+        const paramCount = paramCounts[lower];
+        if (paramCount === undefined) return null;
+
+        if (lower === 'z') {
+          out.push('Z');
+          currentX = subStartX;
+          currentY = subStartY;
+          firstCommand = false;
+          continue;
+        }
+
+        const nums = readNumbers();
+        if (nums.length < paramCount || nums.length % paramCount !== 0) return null;
+
+        for (let n = 0; n < nums.length; n += paramCount) {
+          const chunk = nums.slice(n, n + paramCount);
+
+          switch (lower) {
+            case 'm': {
+              const isFirstPair = n === 0;
+              if (!isAbs && firstCommand) {
+                currentX += chunk[0];
+                currentY += chunk[1];
+                out.push('M', formatNumberCompact(currentX + dx), formatNumberCompact(currentY + dy));
+              } else if (isAbs) {
+                currentX = chunk[0];
+                currentY = chunk[1];
+                if (isFirstPair) {
+                  out.push('M', formatNumberCompact(currentX + dx), formatNumberCompact(currentY + dy));
+                } else {
+                  out.push('L', formatNumberCompact(currentX + dx), formatNumberCompact(currentY + dy));
+                }
+              } else {
+                currentX += chunk[0];
+                currentY += chunk[1];
+                if (isFirstPair) {
+                  out.push('m', formatNumberCompact(chunk[0]), formatNumberCompact(chunk[1]));
+                } else {
+                  out.push('l', formatNumberCompact(chunk[0]), formatNumberCompact(chunk[1]));
+                }
+              }
+              if (isFirstPair) {
+                subStartX = currentX;
+                subStartY = currentY;
+              }
+              break;
+            }
+            case 'l': {
+              if (isAbs) {
+                currentX = chunk[0];
+                currentY = chunk[1];
+                out.push('L', formatNumberCompact(currentX + dx), formatNumberCompact(currentY + dy));
+              } else {
+                currentX += chunk[0];
+                currentY += chunk[1];
+                out.push('l', formatNumberCompact(chunk[0]), formatNumberCompact(chunk[1]));
+              }
+              break;
+            }
+            case 'h': {
+              if (isAbs) {
+                currentX = chunk[0];
+                out.push('H', formatNumberCompact(currentX + dx));
+              } else {
+                currentX += chunk[0];
+                out.push('h', formatNumberCompact(chunk[0]));
+              }
+              break;
+            }
+            case 'v': {
+              if (isAbs) {
+                currentY = chunk[0];
+                out.push('V', formatNumberCompact(currentY + dy));
+              } else {
+                currentY += chunk[0];
+                out.push('v', formatNumberCompact(chunk[0]));
+              }
+              break;
+            }
+            case 'c': {
+              if (isAbs) {
+                out.push('C',
+                  formatNumberCompact(chunk[0] + dx),
+                  formatNumberCompact(chunk[1] + dy),
+                  formatNumberCompact(chunk[2] + dx),
+                  formatNumberCompact(chunk[3] + dy),
+                  formatNumberCompact(chunk[4] + dx),
+                  formatNumberCompact(chunk[5] + dy)
+                );
+                currentX = chunk[4];
+                currentY = chunk[5];
+              } else {
+                out.push('c',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1]),
+                  formatNumberCompact(chunk[2]),
+                  formatNumberCompact(chunk[3]),
+                  formatNumberCompact(chunk[4]),
+                  formatNumberCompact(chunk[5])
+                );
+                currentX += chunk[4];
+                currentY += chunk[5];
+              }
+              break;
+            }
+            case 's': {
+              if (isAbs) {
+                out.push('S',
+                  formatNumberCompact(chunk[0] + dx),
+                  formatNumberCompact(chunk[1] + dy),
+                  formatNumberCompact(chunk[2] + dx),
+                  formatNumberCompact(chunk[3] + dy)
+                );
+                currentX = chunk[2];
+                currentY = chunk[3];
+              } else {
+                out.push('s',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1]),
+                  formatNumberCompact(chunk[2]),
+                  formatNumberCompact(chunk[3])
+                );
+                currentX += chunk[2];
+                currentY += chunk[3];
+              }
+              break;
+            }
+            case 'q': {
+              if (isAbs) {
+                out.push('Q',
+                  formatNumberCompact(chunk[0] + dx),
+                  formatNumberCompact(chunk[1] + dy),
+                  formatNumberCompact(chunk[2] + dx),
+                  formatNumberCompact(chunk[3] + dy)
+                );
+                currentX = chunk[2];
+                currentY = chunk[3];
+              } else {
+                out.push('q',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1]),
+                  formatNumberCompact(chunk[2]),
+                  formatNumberCompact(chunk[3])
+                );
+                currentX += chunk[2];
+                currentY += chunk[3];
+              }
+              break;
+            }
+            case 't': {
+              if (isAbs) {
+                out.push('T',
+                  formatNumberCompact(chunk[0] + dx),
+                  formatNumberCompact(chunk[1] + dy)
+                );
+                currentX = chunk[0];
+                currentY = chunk[1];
+              } else {
+                out.push('t',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1])
+                );
+                currentX += chunk[0];
+                currentY += chunk[1];
+              }
+              break;
+            }
+            case 'a': {
+              if (isAbs) {
+                out.push('A',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1]),
+                  formatNumberCompact(chunk[2]),
+                  formatNumberCompact(chunk[3]),
+                  formatNumberCompact(chunk[4]),
+                  formatNumberCompact(chunk[5] + dx),
+                  formatNumberCompact(chunk[6] + dy)
+                );
+                currentX = chunk[5];
+                currentY = chunk[6];
+              } else {
+                out.push('a',
+                  formatNumberCompact(chunk[0]),
+                  formatNumberCompact(chunk[1]),
+                  formatNumberCompact(chunk[2]),
+                  formatNumberCompact(chunk[3]),
+                  formatNumberCompact(chunk[4]),
+                  formatNumberCompact(chunk[5]),
+                  formatNumberCompact(chunk[6])
+                );
+                currentX += chunk[5];
+                currentY += chunk[6];
+              }
+              break;
+            }
+            default:
+              return null;
+          }
+          firstCommand = false;
+        }
+      }
+
+      return out.join(' ');
+    }
+
     function collapseTransforms(svg) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(svg, 'image/svg+xml');
       const svgEl = doc.querySelector('svg');
       if (!svgEl) return svg;
 
-      function canTranslate(el) {
-        const tag = el.tagName.toLowerCase();
-        if (tag === 'g' || tag === 'svg') {
-          return Array.from(el.children).every(child => canTranslate(child));
+        function canTranslate(el) {
+          const tag = el.tagName.toLowerCase();
+          if (tag === 'g' || tag === 'svg') {
+            return Array.from(el.children).every(child => canTranslate(child));
+          }
+          if (tag === 'path') {
+            const d = el.getAttribute('d');
+            if (!d) return true;
+          if (typeof document.createElementNS === 'function') {
+            const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            if (typeof temp.getPathData === 'function') return true;
+          }
+          return translatePathDataFallback(d, 0, 0) !== null;
+          }
+          return true;
         }
-        if (tag === 'path') {
-          const d = el.getAttribute('d');
-          if (!d) return true;
-          const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-          return typeof temp.getPathData === 'function';
-        }
-        return true;
-      }
 
       function applyTranslate(el, dx, dy) {
         if (dx === 0 && dy === 0) return true;
@@ -1020,16 +1276,19 @@
         const transform = el.getAttribute('transform');
         if (!transform) return;
         const extracted = extractTranslate(transform);
+        if (extracted.rest) {
+          // Only remove pure translate transforms
+          el.setAttribute('transform', transform);
+          return;
+        }
+
         let applied = true;
         if (extracted.dx || extracted.dy) {
           applied = applyTranslate(el, extracted.dx, extracted.dy);
         }
+
         if (applied) {
-          if (extracted.rest) {
-            el.setAttribute('transform', extracted.rest);
-          } else {
-            el.removeAttribute('transform');
-          }
+          el.removeAttribute('transform');
         } else {
           el.setAttribute('transform', transform);
         }
