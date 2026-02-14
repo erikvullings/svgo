@@ -3066,10 +3066,8 @@
                   style: 'color: #f44336;',
                   onclick: (e) => {
                     e.stopPropagation();
-                    if (confirm(`Delete <${node.tagName}>?`)) {
-                      node.remove();
-                      updateFromTree(node.ownerDocument);
-                    }
+                    node.remove();
+                    updateFromTree(node.ownerDocument);
                   }
                 }, '×')
               ])
