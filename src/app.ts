@@ -1,5 +1,49 @@
 import m from 'mithril';
+import type { Vnode, VnodeDOM } from 'mithril';
 import { optimize } from 'svgo/browser';
+
+const vscodeApi = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
+
+type OptimizeOptions = {
+  precision: number;
+  pathPrecision: number;
+  removeTspan: boolean;
+  removeStyling: boolean;
+  removeGroups: boolean;
+  customWidth: number;
+  customHeight: number;
+  useCustomDimensions: boolean;
+  removeDefaultValues: boolean;
+  removeFontFamily: boolean;
+  removeFontSize: boolean;
+  convertSodipodiArcs: boolean;
+  groupSimilarElements: boolean;
+  groupingMode: 'group' | 'remove' | 'none';
+  viewMode: 'code' | 'tree';
+  selectedElementPath: string | null;
+  treeDoc: Document | null;
+  isUpdatingFromTree: boolean;
+};
+
+type HistoryEntry = {
+  originalSvg: string;
+  optimizedSvg: string;
+  options: OptimizeOptions;
+};
+
+type UncontrolledInputAttrs = {
+  value: string;
+  onChange: (nextValue: string) => void;
+  type?: string;
+};
+
+type TreeNodeAttrs = {
+  node: Element;
+  path: string;
+  isRoot?: boolean;
+  prefix?: string;
+  isLast?: boolean;
+};
 
 const ROUNDABLE_ATTRS = new Set([
   'x', 'y', 'cx', 'cy',
@@ -52,23 +96,23 @@ const PRESERVE_ATTR_PREFIXES = ['data-', 'aria-'];
 const BLOCKED_ATTR_PREFIXES = ['inkscape:', 'sodipodi:'];
 const RESERVED_ATTR_NAME = 'data-cx-id';
 
-function hasRoundableAttrs(node) {
+function hasRoundableAttrs(node: Element): boolean {
   if (!node || node.nodeType !== 1) return false;
 
   for (const attr of Array.from(node.attributes || [])) {
     if (ROUNDABLE_ATTRS.has(attr.name)) return true;
   }
 
-  return Array.from(node.children || []).some(hasRoundableAttrs);
+  return Array.from(node.children || []).some(child => hasRoundableAttrs(child));
 }
 
-function extractTranslate(transform) {
+function extractTranslate(transform: string | null) {
   if (!transform) return { dx: 0, dy: 0, rest: '' };
 
   let dx = 0;
   let dy = 0;
 
-  const rest = transform.replace(/translate\(\s*([^)]+)\)/g, (_, args) => {
+  const rest = transform.replace(/translate\(\s*([^)]+)\)/g, (_: string, args: string) => {
     const parts = args.split(/[\s,]+/).map(Number);
     dx += parts[0] || 0;
     dy += parts[1] || 0;
@@ -78,7 +122,7 @@ function extractTranslate(transform) {
   return { dx, dy, rest };
 }
 
-function roundAttrsRecursive(node) {
+function roundAttrsRecursive(node: Element) {
   if (!node || node.nodeType !== 1) return;
 
   let dx = 0;
@@ -612,12 +656,25 @@ function collapseTransforms(svg) {
 }
 
 
-// TypeScript-like implementation in JavaScript
 class SVGOptimizer {
+  originalSvg: string;
+  optimizedSvg: string;
+  editor: MonacoEditorInstance | null;
+  editorReady: boolean;
+  history: HistoryEntry[];
+  historyPointer: number;
+  maxHistory: number;
+  options: OptimizeOptions;
+  unitConversion: Record<string, number>;
+  isRestoringHistory: boolean;
+  copyStatus: 'idle' | 'copied';
+  copyResetTimer: ReturnType<typeof setTimeout> | null;
+
   constructor() {
     this.originalSvg = '';
     this.optimizedSvg = '';
     this.editor = null;
+    this.editorReady = false;
     this.history = []; // Store history for undo/redo
     this.historyPointer = -1; // Pointer to current position in history
     this.maxHistory = 20; // Maximum number of history entries
@@ -660,7 +717,7 @@ class SVGOptimizer {
   }
 
   getSourceSvg() {
-    if (this.editor && typeof this.editor.getValue === 'function') {
+    if (this.editor) {
       return this.editor.getValue();
     }
     return this.originalSvg;
@@ -686,8 +743,8 @@ class SVGOptimizer {
     return this.optimizedSvg || this.getSourceSvg();
   }
 
-  async initializeEditor() {
-    return new Promise((resolve) => {
+  async initializeEditor(): Promise<void> {
+    return new Promise<void>((resolve) => {
       require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs' } });
       require(['vs/editor/editor.main'], () => {
         // Wait for the DOM element to be available
@@ -710,7 +767,8 @@ class SVGOptimizer {
               theme: 'vs-dark',
               automaticLayout: true,
               minimap: { enabled: false },
-              wordWrap: 'on'
+              wordWrap: 'on',
+              renderLineHighlight: 'none'
             });
 
             this.editor.onDidChangeModelContent(() => {
@@ -751,14 +809,14 @@ class SVGOptimizer {
     return !KNOWN_SVG_ATTRS.has(lower);
   }
 
-  injectPreserveMarkers(svg) {
+  injectPreserveMarkers(svg: string): { svg: string; preserved: Map<string, Record<string, string>> } {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, 'image/svg+xml');
-    const preserved = new Map();
+    const preserved = new Map<string, Record<string, string>>();
     let counter = 0;
 
     doc.querySelectorAll('*').forEach(el => {
-      const attrsToPreserve = {};
+      const attrsToPreserve: Record<string, string> = {};
       Array.from(el.attributes).forEach(attr => {
         if (this.shouldPreserveAttribute(attr.name)) {
           attrsToPreserve[attr.name] = attr.value;
@@ -775,7 +833,7 @@ class SVGOptimizer {
     return { svg: new XMLSerializer().serializeToString(doc), preserved };
   }
 
-  restorePreservedAttributes(svg, preserved) {
+  restorePreservedAttributes(svg: string, preserved: Map<string, Record<string, string>>) {
     if (!preserved || preserved.size === 0) return svg;
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, 'image/svg+xml');
@@ -794,10 +852,23 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
+  loadSvgString(svg) {
+    this.originalSvg = svg || '';
+    if (this.editor) {
+      this.options.isUpdatingFromTree = true;
+      this.editor.setValue(this.originalSvg);
+      this.options.isUpdatingFromTree = false;
+    }
+    this.updateTreeDoc();
+    this.optimizeSvg();
+    this.saveToHistory();
+    m.redraw();
+  }
+
   loadFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
-      this.originalSvg = e.target.result;
+      this.originalSvg = String((e.target && (e.target as FileReader).result) ?? '');
       if (this.editor) {
         try {
           this.editor.setValue(this.originalSvg);
@@ -1052,7 +1123,7 @@ class SVGOptimizer {
       return `M${dx} ${dy} l ${pairs.join(' l ')}`;
     }
 
-    function canMergeGroup(group) {
+    function canMergeGroup(group: Element) {
       const children = Array.from(group.children);
       if (children.length < 2) return false;
       if (!children.every(child => child.tagName === 'path')) return false;
@@ -1064,8 +1135,8 @@ class SVGOptimizer {
       return true;
     }
 
-    function collectGroupAttrs(group) {
-      const attrs = {};
+    function collectGroupAttrs(group: Element) {
+      const attrs: Record<string, string> = {};
       Array.from(group.attributes).forEach(attr => {
         if (isPresentationAttr(attr.name)) {
           attrs[attr.name] = attr.value;
@@ -1074,16 +1145,16 @@ class SVGOptimizer {
       return attrs;
     }
 
-    function hasConflictingChildAttrs(groupAttrs, child) {
+    function hasConflictingChildAttrs(groupAttrs: Record<string, string>, child: Element) {
       return Object.entries(groupAttrs).some(([name, value]) => {
         if (!child.hasAttribute(name)) return false;
         return child.getAttribute(name) !== value;
       });
     }
 
-    function getSharedPresentationAttrs(children, groupAttrs) {
-      const shared = {};
-      const hasValue = {};
+    function getSharedPresentationAttrs(children: Element[], groupAttrs: Record<string, string>) {
+      const shared: Record<string, string> = {};
+      const hasValue: Record<string, boolean> = {};
 
       for (const child of children) {
         for (const attr of Array.from(child.attributes)) {
@@ -1113,9 +1184,9 @@ class SVGOptimizer {
       return shared;
     }
 
-    function mergePaths(group) {
+    function mergePaths(group: Element) {
       const groupAttrs = collectGroupAttrs(group);
-      const children = Array.from(group.children);
+      const children = Array.from(group.children) as Element[];
 
       if (children.some(child => hasConflictingChildAttrs(groupAttrs, child))) {
         return false;
@@ -1161,8 +1232,10 @@ class SVGOptimizer {
         return false;
       }
 
-      group.parentElement.insertBefore(merged, group);
-      group.remove();
+      if (group.parentElement) {
+        group.parentElement.insertBefore(merged, group);
+        group.remove();
+      }
       return true;
     }
 
@@ -1262,12 +1335,12 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  groupTextByAttributes(svg) {
+  groupTextByAttributes(svg: string) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, 'image/svg+xml');
 
     // Find all text elements
-    const textElements = Array.from(doc.querySelectorAll('text, tspan'));
+    const textElements = Array.from(doc.querySelectorAll('text, tspan')) as Element[];
 
     if (textElements.length < 2) return svg; // Need at least 2 elements to group
 
@@ -1278,8 +1351,8 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  getGroupableAttributes(el, groupableAttributes) {
-    const attributes = {};
+  getGroupableAttributes(el: Element, groupableAttributes: string[]) {
+    const attributes: Record<string, string> = {};
     groupableAttributes.forEach(attr => {
       const value = el.getAttribute(attr);
       if (value !== null) {
@@ -1289,8 +1362,8 @@ class SVGOptimizer {
     return attributes;
   }
 
-  intersectGroupableAttributes(base, next) {
-    const intersection = {};
+  intersectGroupableAttributes(base: Record<string, string>, next: Record<string, string>) {
+    const intersection: Record<string, string> = {};
     Object.keys(base).forEach(attr => {
       if (next[attr] === base[attr]) {
         intersection[attr] = base[attr];
@@ -1299,7 +1372,7 @@ class SVGOptimizer {
     return intersection;
   }
 
-  estimateGroupSavings(commonAttributes, elementCount) {
+  estimateGroupSavings(commonAttributes: Record<string, string>, elementCount: number) {
     if (elementCount < 2) return 0;
     const attrSize = Object.entries(commonAttributes).reduce((sum, [attr, value]) => {
       return sum + ` ${attr}="${value}"`.length;
@@ -1308,8 +1381,8 @@ class SVGOptimizer {
     return (elementCount - 1) * attrSize - groupOverhead;
   }
 
-  groupRunByAttributes(parent, run, groupableAttributes) {
-    const grouped = new Set();
+  groupRunByAttributes(parent: Element, run: Element[], groupableAttributes: string[]) {
+    const grouped = new Set<Element>();
     let i = 0;
 
     while (i < run.length) {
@@ -1324,8 +1397,8 @@ class SVGOptimizer {
         continue;
       }
 
-      let bestGroup = null;
-      let currentCommon = { ...commonAttributes };
+      let bestGroup: { end: number; attrs: Record<string, string>; savings: number } | null = null;
+      let currentCommon: Record<string, string> = { ...commonAttributes };
 
       for (let j = i + 1; j < run.length; j++) {
         if (grouped.has(run[j])) break;
@@ -1367,16 +1440,16 @@ class SVGOptimizer {
     }
   }
 
-  groupElementsByCommonAttributes(doc, tagNames, groupableAttributes) {
+  groupElementsByCommonAttributes(doc: Document, tagNames: string[], groupableAttributes: string[]) {
     const tagSet = new Set(tagNames.map(name => name.toLowerCase()));
-    const parents = new Set();
+    const parents = new Set<Element>();
 
     doc.querySelectorAll(tagNames.join(',')).forEach(el => {
       if (el.parentElement) parents.add(el.parentElement);
     });
 
     parents.forEach(parent => {
-      const children = Array.from(parent.children);
+      const children = Array.from(parent.children) as Element[];
       let i = 0;
 
       while (i < children.length) {
@@ -1419,19 +1492,19 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  combinePaths(svg) {
+  combinePaths(svg: string) {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, 'image/svg+xml');
     const SVG_NS = 'http://www.w3.org/2000/svg';
 
-    const pathElements = Array.from(doc.querySelectorAll('path'));
+    const pathElements = Array.from(doc.querySelectorAll('path')) as Element[];
     if (pathElements.length < 2) return svg;
 
     // Group paths by their attributes (excluding 'd')
-    const pathGroups = new Map();
+    const pathGroups = new Map<string, { attributes: Record<string, string>; paths: Element[] }>();
 
     pathElements.forEach(path => {
-      const attributes = {};
+      const attributes: Record<string, string> = {};
       Array.from(path.attributes).forEach(attr => {
         if (attr.name !== 'd') {
           attributes[attr.name] = attr.value;
@@ -1442,7 +1515,8 @@ class SVGOptimizer {
       if (!pathGroups.has(signature)) {
         pathGroups.set(signature, { attributes, paths: [] });
       }
-      pathGroups.get(signature).paths.push(path);
+      const entry = pathGroups.get(signature);
+      if (entry) entry.paths.push(path);
     });
 
     // Combine paths with identical attributes
@@ -1501,16 +1575,16 @@ class SVGOptimizer {
 
     // Get all children of defs
     const defChildren = Array.from(defsElement.children);
-    const defsByContent = new Map();
-    const idMappings = new Map();
+    const defsByContent = new Map<string, string>();
+    const idMappings = new Map<string, string>();
 
     defChildren.forEach(child => {
       // Create a normalized string representation of the element (without id)
-      const childClone = child.cloneNode(true);
+      const childClone = child.cloneNode(true) as Element;
       childClone.removeAttribute('id');
       const normalized = new XMLSerializer().serializeToString(childClone);
 
-      const originalId = child.getAttribute('id');
+      const originalId = child.getAttribute('id') || '';
 
       if (defsByContent.has(normalized)) {
         // This is a duplicate - map its ID to the first occurrence's ID
@@ -2137,7 +2211,17 @@ class SVGOptimizer {
     }
 
     this.historyPointer = this.history.length - 1;
+    this.notifyVscode();
     m.redraw();
+  }
+
+  notifyVscode() {
+    if (!vscodeApi) return;
+    vscodeApi.postMessage({
+      type: 'update-svg',
+      svg: this.getSourceSvg() || '',
+      optimizedSvg: this.getPreviewSvg() || ''
+    });
   }
 
 
@@ -2194,7 +2278,7 @@ class SVGOptimizer {
 
 export const optimizer = new SVGOptimizer();
 
-const TreeView = {
+const TreeView: m.Component = {
   view() {
     if (!optimizer.getSourceSvg()) return m('.tree-view', 'No SVG loaded');
     // Always update tree doc to ensure it reflects current state
@@ -2247,7 +2331,14 @@ const ATTRIBUTE_SUGGESTIONS_BY_TAG = {
   symbol: ['viewBox', 'preserveAspectRatio']
 };
 
-const attributeDialogState = {
+const attributeDialogState: {
+  isOpen: boolean;
+  path: string | null;
+  tagName: string;
+  name: string;
+  value: string;
+  suggestions: string[];
+} = {
   isOpen: false,
   path: null,
   tagName: '',
@@ -2256,7 +2347,7 @@ const attributeDialogState = {
   suggestions: []
 };
 
-function getAttributeSuggestionsForElement(element) {
+function getAttributeSuggestionsForElement(element: Element) {
   const tagName = element.tagName.toLowerCase();
   const specific = ATTRIBUTE_SUGGESTIONS_BY_TAG[tagName] || [];
   const existing = Array.from(element.attributes).map(attr => attr.name);
@@ -2264,7 +2355,7 @@ function getAttributeSuggestionsForElement(element) {
   return Array.from(new Set(merged));
 }
 
-function openAttributeDialog(path) {
+function openAttributeDialog(path: string) {
   const doc = optimizer.options.treeDoc;
   const element = getElementByPath(doc, path);
   if (!element) return;
@@ -2305,61 +2396,68 @@ function applyAttributeDialog() {
 }
 
 // Uncontrolled Input Component to prevent Mithril redraws from interfering with typing
-const UncontrolledInput = {
-  oncreate({ dom, attrs }) {
-    dom.value = attrs.value;
-    dom.size = Math.max(1, Math.min(20, dom.value.length));
+const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
+  oncreate({ dom, attrs }: VnodeDOM<UncontrolledInputAttrs>) {
+    const input = dom as HTMLInputElement;
+    input.value = attrs.value;
+    input.size = Math.max(1, Math.min(20, input.value.length));
 
-    dom.addEventListener('keydown', (e) => {
+    input.addEventListener('keydown', (e: KeyboardEvent) => {
       e.stopPropagation();
       if (e.key === 'Escape') {
-        dom.value = attrs.value;
-        dom.blur();
+        input.value = attrs.value;
+        input.blur();
       }
       if (e.key === 'Enter') {
-        dom.blur();
+        input.blur();
       }
     });
 
-    dom.addEventListener('input', (e) => {
-      e.target.size = Math.max(1, Math.min(20, e.target.value.length));
+    input.addEventListener('input', (e: Event) => {
+      const target = e.target as HTMLInputElement;
+      target.size = Math.max(1, Math.min(20, target.value.length));
     });
 
-    dom.addEventListener('change', (e) => {
+    input.addEventListener('change', () => {
       attrs.type = 'change'; // Signal change
-      if (dom.value !== attrs.value) {
-        attrs.onChange(dom.value);
+      if (input.value !== attrs.value) {
+        attrs.onChange(input.value);
       }
     });
   },
-  onupdate({ dom, attrs }) {
+  onupdate({ dom, attrs }: VnodeDOM<UncontrolledInputAttrs>) {
+    const input = dom as HTMLInputElement;
     // Only update value from model if we are NOT currently editing/focused
-    if (document.activeElement !== dom) {
-      dom.value = attrs.value;
-      dom.size = Math.max(1, Math.min(20, dom.value.length));
+    if (document.activeElement !== input) {
+      input.value = attrs.value;
+      input.size = Math.max(1, Math.min(20, input.value.length));
     }
   },
-  view({ attrs }) {
+  view() {
     return m('input.attr-value');
   }
 };
 
-const TreeNode = {
-  view({ attrs }) {
-    const { node, path, isRoot, prefix, isLast } = attrs;
-    if (node.nodeType !== 1) return null;
+const TreeNode: m.Component<TreeNodeAttrs> = {
+  view({ attrs }: Vnode<TreeNodeAttrs>) {
+    const node = attrs.node;
+    const path = attrs.path;
+    const isRoot = Boolean(attrs.isRoot);
+    const prefix = attrs.prefix ?? '';
+    const isLast = Boolean(attrs.isLast);
+    if (!node || node.nodeType !== 1) return null;
 
     const isSelected = optimizer.options.selectedElementPath === path;
 
     // For text and tspan elements, we want to include both children and text content
-    let children = [];
+    let children: Array<Element | Text> = [];
     if (node.tagName === 'text' || node.tagName === 'tspan') {
       // Include both regular children and text nodes
-      const allNodes = Array.from(node.childNodes);
-      children = allNodes.filter(n => n.nodeType === 1 || (n.nodeType === 3 && n.textContent.trim() !== ''));
+      const allNodes = Array.from(node.childNodes) as Array<Element | Text>;
+      children = allNodes.filter(n => n.nodeType === 1 || (n.nodeType === 3 && (n.textContent || '').trim() !== ''));
     } else {
       // For other elements, just use regular children
-      children = Array.from(node.children);
+      children = Array.from(node.children) as Element[];
     }
 
     const currentPrefix = prefix;
@@ -2372,12 +2470,12 @@ const TreeNode = {
           id: `node-${path.replace(/\./g, '-')}`,
           class: `${isSelected ? 'selected' : ''} ${dragOverPath === path ? 'drag-over' : ''}`,
           draggable: !isRoot,
-          ondragstart: (e) => {
+          ondragstart: (e: DragEvent) => {
             dragSourcePath = path;
             e.dataTransfer.setData('text/plain', path);
             e.stopPropagation();
           },
-          ondragover: (e) => {
+          ondragover: (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation();
             dragOverPath = path;
@@ -2385,17 +2483,17 @@ const TreeNode = {
           ondragleave: () => {
             if (dragOverPath === path) dragOverPath = null;
           },
-          ondrop: (e) => {
+          ondrop: (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation();
-            const sourcePath = e.dataTransfer.getData('text/plain');
+            const sourcePath = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
             if (sourcePath && sourcePath !== path) {
               moveElementTo(sourcePath, path);
             }
             dragOverPath = null;
             dragSourcePath = null;
           },
-          onclick: (e) => {
+          onclick: (e: MouseEvent) => {
             e.stopPropagation();
             optimizer.options.selectedElementPath = path;
             highlightElement(path);
@@ -2483,7 +2581,8 @@ const TreeNode = {
                 class: 'text-node',
                 style: 'color: #9cdcfe;',
                 oncreate: (vnode) => {
-                  vnode.dom.onclick = (e) => {
+                  const dom = vnode.dom as HTMLElement;
+                  dom.onclick = (e) => {
                     e.stopPropagation();
                     console.log('Text node clicked:', { path: textPath, child });
                     optimizer.options.selectedElementPath = textPath;
@@ -2514,8 +2613,9 @@ const TreeNode = {
             ]);
           } else {
             // Regular element child
+            const elementChild = child as Element;
             return m(TreeNode, {
-              node: child,
+              node: elementChild,
               path: `${path}.${index}`,
               prefix: childPrefix,
               isLast: index === children.length - 1,
@@ -2600,8 +2700,8 @@ function getElementByPath(doc, path) {
 
 function highlightElement(path) {
   console.log('highlightElement called with:', path);
-  const previewContainer = document.querySelector('.preview-container');
-  const previewSvg = previewContainer.querySelector('svg');
+  const previewContainer = document.querySelector('.preview-container') as HTMLElement | null;
+  const previewSvg = previewContainer ? (previewContainer.querySelector('svg') as SVGGraphicsElement | null) : null;
   if (!previewSvg) {
     console.log('No preview SVG found!');
     return;
@@ -2609,10 +2709,10 @@ function highlightElement(path) {
 
   previewSvg.querySelectorAll('.highlighted-preview').forEach(el => el.classList.remove('highlighted-preview'));
 
-  const targetEl = getElementInSvgByPath(previewSvg, path);
+  const targetEl = getElementInSvgByPath(previewSvg, path) as SVGGraphicsElement | null;
   console.log('Target element:', targetEl);
 
-  if (targetEl && targetEl.getBBox) {
+  if (targetEl && typeof targetEl.getBBox === 'function') {
     try {
       targetEl.classList.add('highlighted-preview');
       console.log('Element highlighted');
@@ -2624,9 +2724,9 @@ function highlightElement(path) {
   }
 }
 
-function getElementInSvgByPath(svg, path) {
+function getElementInSvgByPath(svg: Element, path: string) {
   const parts = path.split('.');
-  let current = svg;
+  let current: Element | Text = svg;
   if (parts[0] !== '0') {
     console.log('Invalid root:', path);
     return null;
@@ -2644,12 +2744,12 @@ function getElementInSvgByPath(svg, path) {
       const textIndex = parseInt(arrayMatch[1]) - 1; // Convert to 0-based index
       console.log('  Found text node index:', textIndex);
       // Find the text node at this index
-      const children = Array.from(current.childNodes);
-      const textNodes = children.filter(n => n.nodeType === 3);
+      const children = Array.from((current as Element).childNodes) as Array<Element | Text>;
+      const textNodes = children.filter(n => n.nodeType === 3) as Text[];
       console.log('  Total text nodes:', textNodes.length, 'textIndex:', textIndex);
       if (textNodes.length > textIndex) {
         current = textNodes[textIndex];
-        console.log('  Text node found:', current.textContent.substring(0, 20) + '...');
+        console.log('  Text node found:', (current.textContent || '').substring(0, 20) + '...');
       } else {
         console.log('  Text node not found!');
         return null;
@@ -2662,27 +2762,28 @@ function getElementInSvgByPath(svg, path) {
     // Handle negative indices for text nodes
     if (index < 0) {
       // Find the text node at this index
-      const children = Array.from(current.childNodes);
-      const textNodes = children.filter(n => n.nodeType === 3);
+      const children = Array.from((current as Element).childNodes) as Array<Element | Text>;
+      const textNodes = children.filter(n => n.nodeType === 3) as Text[];
       if (textNodes.length >= Math.abs(index)) {
         current = textNodes[Math.abs(index)];
       } else {
         return null;
       }
     } else {
-      current = current.children[index];
+      current = (current as Element).children[index];
       if (!current) {
-        console.log('  Element not found at index:', index, 'total children:', current.children.length);
+        console.log('  Element not found at index:', index);
         return null;
       }
     }
   }
-  console.log('Final element:', current.tagName || '[Text Node]');
-  return current;
+  const element = current.nodeType === 1 ? (current as Element) : null;
+  console.log('Final element:', element ? element.tagName : '[Text Node]');
+  return element;
 }
 
 
-export const App = {
+export const App: m.Component = {
   oncreate() {
     setTimeout(() => {
       optimizer.initializeEditor();
@@ -3088,9 +3189,9 @@ export const App = {
               m('input#attr-name-input', {
                 list: 'attr-suggestions',
                 value: attributeDialogState.name,
-                oncreate: ({ dom }) => dom.focus(),
-                oninput: (e) => {
-                  attributeDialogState.name = e.target.value;
+                oncreate: ({ dom }) => (dom as HTMLInputElement).focus(),
+                oninput: (e: Event) => {
+                  attributeDialogState.name = (e.target as HTMLInputElement).value;
                   const doc = optimizer.options.treeDoc;
                   const element = getElementByPath(doc, attributeDialogState.path);
                   if (element) {
@@ -3100,7 +3201,7 @@ export const App = {
                     }
                   }
                 },
-                onkeydown: (e) => {
+                onkeydown: (e: KeyboardEvent) => {
                   if (e.key === 'Escape') {
                     e.preventDefault();
                     closeAttributeDialog();
@@ -3119,10 +3220,10 @@ export const App = {
               m('label', 'Value'),
               m('input', {
                 value: attributeDialogState.value,
-                oninput: (e) => {
-                  attributeDialogState.value = e.target.value;
+                oninput: (e: Event) => {
+                  attributeDialogState.value = (e.target as HTMLInputElement).value;
                 },
-                onkeydown: (e) => {
+                onkeydown: (e: KeyboardEvent) => {
                   if (e.key === 'Escape') {
                     e.preventDefault();
                     closeAttributeDialog();
@@ -3156,7 +3257,7 @@ let startX = 0;
 let startY = 0;
 
 function applyTransform() {
-  const svg = document.querySelector(".preview-container svg");
+  const svg = document.querySelector(".preview-container svg") as HTMLElement | null;
   if (svg) {
     svg.style.transform = `translate(${panX}px, ${panY}px) scale(${svgScale})`;
     svg.style.transformOrigin = "0 0";
@@ -3176,17 +3277,17 @@ function resetZoom() {
 }
 
 function setupPanEvents() {
-  const container = document.querySelector('.preview-container');
+  const container = document.querySelector('.preview-container') as HTMLElement | null;
   if (!container) return;
 
-  container.addEventListener('mousedown', (e) => {
+  container.addEventListener('mousedown', (e: MouseEvent) => {
     isPanning = true;
     startX = e.clientX - panX;
     startY = e.clientY - panY;
     container.style.cursor = 'grabbing';
   });
 
-  container.addEventListener('mousemove', (e) => {
+  container.addEventListener('mousemove', (e: MouseEvent) => {
     if (!isPanning) return;
     panX = e.clientX - startX;
     panY = e.clientY - startY;
@@ -3203,7 +3304,7 @@ function setupPanEvents() {
     container.style.cursor = 'default';
   });
 
-  container.addEventListener('wheel', (e) => {
+  container.addEventListener('wheel', (e: WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     svgScale *= delta;
@@ -3216,6 +3317,16 @@ export function initializeGlobalHandlers() {
   if (globalHandlersInitialized) return;
   globalHandlersInitialized = true;
   setupPanEvents();
+
+  if (vscodeApi) {
+    window.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+      if (data.type === 'load-svg') {
+        optimizer.loadSvgString(data.svg || '');
+      }
+    });
+  }
 
   document.addEventListener('keydown', (e) => {
     // Don't pan or hijack shortcuts if typing or inside the code editor

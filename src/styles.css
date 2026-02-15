@@ -199,6 +199,16 @@
       overflow: hidden;
     }
 
+    .monaco-editor .lineHighlight,
+    .monaco-editor .lineHighlightBorder {
+      background: transparent !important;
+      border: none !important;
+    }
+
+    .monaco-editor .scroll-decoration {
+      box-shadow: none !important;
+    }
+
     .preview-container {
       flex: 1;
       padding: 1rem;

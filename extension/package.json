@@ -1,0 +1,33 @@
+{
+  "name": "svg-optimizer",
+  "displayName": "SVG Optimizer",
+  "publisher": "erikvullings",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.86.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:svg"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "svgOptimizer.open",
+        "title": "SVG Optimizer: Open View"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -p . -w"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "@types/vscode": "^1.109.0",
+    "typescript": "^5.9.3"
+  }
+}
