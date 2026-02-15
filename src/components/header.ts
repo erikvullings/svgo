@@ -9,17 +9,23 @@ export type HeaderStats = {
 
 export type HeaderAttrs = {
   stats: HeaderStats;
-  theme: "dark" | "light" | "auto";
-  onToggleTheme: () => void;
+  onToggleSidebar: () => void;
 };
 
 export const Header: m.Component<HeaderAttrs> = {
   view({ attrs }) {
-    const { stats, theme, onToggleTheme } = attrs;
+    const { stats, onToggleSidebar } = attrs;
     return m(".header", [
-      m(".title", [
-        m("img.logo", { src: "logo.svg", alt: "Logo" }),
-        m("span", "Advanced SVG Optimizer"),
+      m(".header-left", [
+        m(
+          "button.menu-toggle",
+          { onclick: onToggleSidebar, title: "Toggle sidebar" },
+          iconMenu(),
+        ),
+        m(".title", [
+          m("img.logo", { src: "logo.svg", alt: "Logo" }),
+          m("span", "Advanced SVG Optimizer"),
+        ]),
       ]),
       m(".stats", [
         m(".stat", [
@@ -39,11 +45,17 @@ export const Header: m.Component<HeaderAttrs> = {
           ),
         ]),
       ]),
-      m(
-        "button.theme-toggle",
-        { onclick: onToggleTheme, title: "Toggle theme" },
-        theme === "dark" ? "Light" : theme === "light" ? "Auto" : "Dark",
-      ),
     ]);
   },
 };
+
+function iconMenu(): m.Vnode {
+  return m(
+    "svg.icon[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2]",
+    [
+      m("path[d=M3 6h18]"),
+      m("path[d=M3 12h18]"),
+      m("path[d=M3 18h18]"),
+    ],
+  );
+}

@@ -3,77 +3,16 @@ import { SVGOptimizer } from "../optimizer";
 
 export type ControlsAttrs = {
   optimizer: SVGOptimizer;
-  sourceSvg: string;
 };
 
 export const Controls: m.Component<ControlsAttrs> = {
   view({ attrs }) {
-    const { optimizer, sourceSvg } = attrs;
+    const { optimizer } = attrs;
     return m(".controls", [
-      m(".file-input", [
-        m("input[type=file]", {
-          id: "file-input",
-          accept: ".svg,image/svg+xml",
-          onchange: (e: Event) => {
-            const input = e.target as HTMLInputElement;
-            if (input.files && input.files[0]) {
-              optimizer.loadFile(input.files[0]);
-            }
-          },
-        }),
-      ]),
-      m("label.file-button", { for: "file-input" }, "Open SVG File"),
-      m(
-        "button[type=button][title=Load optimized SVG in editor]",
-        {
-          disabled: sourceSvg && sourceSvg.trim().length > 0 ? undefined : "disabled",
-          onclick: () => optimizer.loadOptimizedFile(),
-        },
-        "Optimize",
-      ),
-      m(
-        "button[type=button][title=Autocrop viewBox to content]",
-        {
-          disabled: sourceSvg && sourceSvg.trim().length > 0 ? undefined : "disabled",
-          onclick: () => optimizer.autocropCurrentSvg(),
-        },
-        "Autocrop",
-      ),
-      m(
-        "button[type=button][title=Undo]",
-        {
-          disabled: !optimizer.canUndo(),
-          onclick: () => {
-            optimizer.undo();
-            m.redraw();
-          },
-        },
-        m(
-          "svg[fill=none][viewBox=0 0 24 24][width=20][height=20]",
-          m(
-            "path[stroke=#000][stroke-linecap=round][stroke-width=2.5][d=M21 14c-.84-1.6-2.3-3-4.1-3.9a11 11 0 0 0-5.9-.96c-3.3.41-5.6 2.6-8.2 4.6m0-4.6v4.9h4.9]",
-          ),
-        ),
-      ),
-      m(
-        "button[type=button][title=Redo].svg",
-        {
-          disabled: !optimizer.canRedo(),
-          onclick: () => {
-            optimizer.redo();
-            m.redraw();
-          },
-        },
-        m(
-          "svg[fill=none][viewBox=0 0 24 24][width=20][height=20]",
-          m(
-            "path[stroke=#000][stroke-linecap=round][stroke-width=2.5][d=M3.1 14c.84-1.6 2.3-3 4.1-3.9a11 11 0 0 1 5.9-.96c3.3.41 5.6 2.6 8.2 4.6m0-4.6v4.9H16]",
-          ),
-        ),
-      ),
-      m(".option-group", [
-        m(".checkbox-group", [
-          m("label", "Precision:"),
+      m(".option-section", [
+        m(".section-title", "Precision"),
+        m(".checkbox-group.precision-row", [
+          m("label", "General:"),
           m("input.number-input[type=number]", {
             value: optimizer.options.precision,
             min: 0,
@@ -88,8 +27,8 @@ export const Controls: m.Component<ControlsAttrs> = {
             },
           }),
         ]),
-        m(".checkbox-group", [
-          m("label", "Path precision:"),
+        m(".checkbox-group.precision-row", [
+          m("label", "Path:"),
           m("input.number-input[type=number]", {
             value: optimizer.options.pathPrecision,
             min: 0,
@@ -104,6 +43,9 @@ export const Controls: m.Component<ControlsAttrs> = {
             },
           }),
         ]),
+      ]),
+      m(".option-section", [
+        m(".section-title", "Cleanup"),
         m(".checkbox-group", [
           m("input[type=checkbox]", {
             id: "convert-sodipodi",
@@ -188,8 +130,11 @@ export const Controls: m.Component<ControlsAttrs> = {
           }),
           m("label", { for: "remove-styling" }, "Remove styling"),
         ]),
+      ]),
+      m(".option-section", [
+        m(".section-title", "Grouping"),
         m(".checkbox-group.grouping", [
-          m("label", { class: "grouping-label" }, "Grouping:"),
+          // m("label", { class: "grouping-label" }, "Grouping:"),
           m("input[type=radio]", {
             id: "grouping-none",
             name: "grouping-mode",
@@ -205,7 +150,11 @@ export const Controls: m.Component<ControlsAttrs> = {
               }
             },
           }),
-          m("label", { for: "grouping-none", class: "grouping-option" }, "None"),
+          m(
+            "label",
+            { for: "grouping-none", class: "grouping-option" },
+            "None",
+          ),
           m("input[type=radio]", {
             id: "grouping-group",
             name: "grouping-mode",
@@ -221,7 +170,11 @@ export const Controls: m.Component<ControlsAttrs> = {
               }
             },
           }),
-          m("label", { for: "grouping-group", class: "grouping-option" }, "Group similar"),
+          m(
+            "label",
+            { for: "grouping-group", class: "grouping-option" },
+            "Group similar",
+          ),
           m("input[type=radio]", {
             id: "grouping-remove",
             name: "grouping-mode",
@@ -239,6 +192,9 @@ export const Controls: m.Component<ControlsAttrs> = {
           }),
           m("label", { for: "grouping-remove" }, "Remove groups"),
         ]),
+      ]),
+      m(".option-section", [
+        m(".section-title", "Custom Size"),
         m(".checkbox-group", [
           m("input[type=checkbox]", {
             id: "custom-dimensions",
@@ -251,7 +207,6 @@ export const Controls: m.Component<ControlsAttrs> = {
               optimizer.saveToHistory();
             },
           }),
-          m("label", { for: "custom-dimensions" }, "Custom size:"),
           m("input.dimension-input[type=number]", {
             value: optimizer.options.customWidth,
             placeholder: "Width",

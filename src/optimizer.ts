@@ -344,7 +344,19 @@ class SVGOptimizer {
 
   loadOptimizedFile(): void {
     const sourceSvg = this.getSourceSvg();
-    if (!sourceSvg || !sourceSvg.trim()) return;
+    if (!sourceSvg || !sourceSvg.trim() || !/<svg\b/i.test(sourceSvg)) {
+      this.originalSvg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
+      if (this.editor) {
+        this.options.isUpdatingFromTree = true;
+        this.editor.setValue(this.originalSvg);
+        this.options.isUpdatingFromTree = false;
+      }
+      this.updateTreeDoc();
+      this.optimizeSvg();
+      this.saveToHistory();
+      m.redraw();
+      return;
+    }
     this.optimizeSvg();
     if (this.optimizedSvg) {
       this.originalSvg = this.optimizedSvg;
@@ -1646,8 +1658,8 @@ class SVGOptimizer {
 
   async optimizeSvg(): Promise<void> {
     const sourceSvg = this.getSourceSvg();
-    if (!sourceSvg || !sourceSvg.trim()) {
-      this.optimizedSvg = "";
+    if (!sourceSvg || !sourceSvg.trim() || !/<svg\b/i.test(sourceSvg)) {
+      this.optimizedSvg = '<svg xmlns="http://www.w3.org/2000/svg"></svg>';
       return;
     }
 

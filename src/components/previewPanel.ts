@@ -1,8 +1,5 @@
 import m from "mithril";
-import { SVGOptimizer } from "../optimizer";
-
 export type PreviewPanelAttrs = {
-  optimizer: SVGOptimizer;
   previewSvg: string;
   onZoomIn: () => void;
   onZoomOut: () => void;
@@ -11,7 +8,7 @@ export type PreviewPanelAttrs = {
 
 export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
   view({ attrs }) {
-    const { optimizer, previewSvg, onZoomIn, onZoomOut, onResetZoom } = attrs;
+    const { previewSvg, onZoomIn, onZoomOut, onResetZoom } = attrs;
 
     return m(".preview-panel#right-panel", [
       m(".panel-header", [
@@ -22,14 +19,6 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
             m("button", { onclick: onZoomOut }, "-"),
             m("button", { onclick: onResetZoom }, "Reset"),
           ]),
-        previewSvg &&
-          m(
-            "button.download-btn",
-            {
-              onclick: () => optimizer.downloadSvg(),
-            },
-            "Download",
-          ),
       ]),
       m(".preview-container", [
         previewSvg

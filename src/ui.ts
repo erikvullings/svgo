@@ -1,10 +1,10 @@
 import m from "mithril";
 import { optimizer, vscodeApi } from "./optimizer";
 import { Header } from "./components/header";
-import { Controls } from "./components/controls";
 import { EditorPanel } from "./components/editorPanel";
 import { PreviewPanel } from "./components/previewPanel";
 import { renderAttributeDialog } from "./treeView";
+import { Sidebar } from "./components/sidebar";
 
 let svgScale = 1;
 let panX = 0;
@@ -15,6 +15,10 @@ let startY = 0;
 
 let theme: "dark" | "light" | "auto" =
   (localStorage.getItem("svgo-theme") as "dark" | "light" | "auto") || "dark";
+let sidebarOpen = true;
+
+const showFileActions = true;
+const showDownload = true;
 
 function resolveTheme(nextTheme: "dark" | "light" | "auto") {
   if (nextTheme === "auto") {
@@ -38,6 +42,10 @@ function toggleTheme() {
   const next =
     theme === "dark" ? "light" : theme === "light" ? "auto" : "dark";
   applyTheme(next);
+}
+
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
 }
 
 function applyTransform(): void {
@@ -190,41 +198,63 @@ export const App: m.Component = {
     };
 
     const body: m.Children[] = [
-      m(Header, { stats: headerStats, theme, onToggleTheme: toggleTheme }),
-      m(Controls, { optimizer, sourceSvg }),
-      m(".main-content", {
-        oncreate: () => {
-          const splitter = document.getElementById("dragbar");
-          const left = document.getElementById("left-panel");
-          const right = document.getElementById("right-panel");
-          if (!splitter || !left || !right) return;
-          splitter.onmousedown = function (e) {
-            e.preventDefault();
-            document.onmousemove = function (event) {
-              let percent = (event.clientX / window.innerWidth) * 100;
-              let percentSplitter = (6 / window.innerWidth) * 100;
-              percent = Math.max(10, Math.min(90, percent));
-              left.style.flex = `0 0 ${percent}%`;
-              right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
-            };
-            document.onmouseup = function () {
-              document.onmousemove = null;
-              document.onmouseup = null;
-            };
-          };
-        },
-      }, [
-        m(".editor-panel#left-panel", [
-          m(EditorPanel, { sourceSvg, isCopied, onCopy: copyToClipboard }),
-        ]),
-        m("div#dragbar.dragbar"),
-        m(PreviewPanel, {
+      m(".app-shell", [
+        m(Sidebar, {
           optimizer,
-          previewSvg,
-          onZoomIn: () => zoomSvg(1.2),
-          onZoomOut: () => zoomSvg(0.8),
-          onResetZoom: () => resetZoom(),
+          sourceSvg,
+          theme,
+          onToggleTheme: toggleTheme,
+          open: sidebarOpen,
+          showFileActions,
+          showDownload,
         }),
+        m(".app-main", [
+          m(Header, { stats: headerStats, onToggleSidebar: toggleSidebar }),
+          m(".main-content", {
+            oncreate: () => {
+              const splitter = document.getElementById("dragbar");
+              const left = document.getElementById("left-panel");
+              const right = document.getElementById("right-panel");
+              if (!splitter || !left || !right) return;
+              splitter.onmousedown = function (e) {
+                e.preventDefault();
+                const container = splitter.parentElement as HTMLElement | null;
+                document.onmousemove = function (event) {
+                  const bounds = container?.getBoundingClientRect();
+                  const isPortrait =
+                    (bounds?.height ?? window.innerHeight) >
+                    (bounds?.width ?? window.innerWidth);
+                  const total = isPortrait
+                    ? bounds?.height ?? window.innerHeight
+                    : bounds?.width ?? window.innerWidth;
+                  const offset = isPortrait
+                    ? event.clientY - (bounds?.top ?? 0)
+                    : event.clientX - (bounds?.left ?? 0);
+                  let percent = (offset / total) * 100;
+                  let percentSplitter = (6 / total) * 100;
+                  percent = Math.max(10, Math.min(90, percent));
+                  left.style.flex = `0 0 ${percent}%`;
+                  right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
+                };
+                document.onmouseup = function () {
+                  document.onmousemove = null;
+                  document.onmouseup = null;
+                };
+              };
+            },
+          }, [
+            m(".editor-panel#left-panel", [
+              m(EditorPanel, { sourceSvg, isCopied, onCopy: copyToClipboard }),
+            ]),
+            m("div#dragbar.dragbar"),
+            m(PreviewPanel, {
+              previewSvg,
+              onZoomIn: () => zoomSvg(1.2),
+              onZoomOut: () => zoomSvg(0.8),
+              onResetZoom: () => resetZoom(),
+            }),
+          ]),
+        ]),
       ]),
     ];
 
