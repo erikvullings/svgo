@@ -51,17 +51,17 @@ Behavior:
 ```bash
 cd extension
 npm install
-npm run vscode:prepublish
+pnpm vscode:prepublish
 cd ..
 ```
 
-2. Run the extension in a development instance:
+1. Run the extension in a development instance:
 
 ```bash
 code --extensionDevelopmentPath="$(pwd)/extension"
 ```
 
-3. In the Extension Development Host window:
+1. In the Extension Development Host window:
 
 - Open an `.svg` file.
 - Run `SVG Optimizer: Open View` from the Command Palette.
@@ -71,37 +71,39 @@ code --extensionDevelopmentPath="$(pwd)/extension"
 Publishing is done with `@vscode/vsce` and a Marketplace publisher/PAT.
 
 1. Ensure extension metadata is ready in `extension/package.json`:
+
 - `name`
 - `displayName`
 - `publisher`
 - `version`
 - `engines.vscode`
 
-2. Create a publisher and PAT (Marketplace `Manage` scope):
+1. Create a publisher and PAT (Marketplace `Manage` scope):
+
 - [Publishing Extensions (official docs)](https://code.visualstudio.com/api/working-with-extensions/publishing-extension)
 - [Marketplace publisher management](https://marketplace.visualstudio.com/manage/publishers/)
 
-3. Install `vsce`:
+1. Install `vsce`:
 
 ```bash
 npm install -g @vscode/vsce
 ```
 
-4. Build before packaging (out-of-the-box):
+1. Build before packaging (out-of-the-box):
 
 ```bash
 cd extension
 npm run vscode:prepublish
 ```
 
-5. Package and test the `.vsix` locally:
+1. Package and test the `.vsix` locally:
 
 ```bash
 vsce package
 code --install-extension *.vsix
 ```
 
-6. Publish:
+1. Publish:
 
 ```bash
 vsce login erikvullings

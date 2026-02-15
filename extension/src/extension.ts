@@ -106,9 +106,10 @@ function getWebviewHtml(webview: vscode.Webview, context: vscode.ExtensionContex
   const nonce = getNonce();
   const assetsUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewRootUri, 'assets'));
 
-  html = html.replace(/(src|href)=\"\/?assets\/(.*?)\"/g, (_m, attr, file) => {
-    return `${attr}="${assetsUri}/${file}"`;
-  });
+  html = html.replace(
+    /(src|href)=["'](?:\.\/|\/)?assets\/([^"']+)["']/g,
+    (_m, attr, file) => `${attr}="${assetsUri}/${file}"`
+  );
 
   const staticFiles = [
     'apple-touch-icon.png',

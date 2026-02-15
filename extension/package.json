@@ -10,7 +10,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:svg"
+    "onLanguage:svg",
+    "onCommand:svgOptimizer.open"
   ],
   "main": "./dist/extension.js",
   "contributes": {
