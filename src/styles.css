@@ -513,6 +513,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      min-height: 0;
     }
 
     .preview-controls {
@@ -574,6 +575,21 @@
     .svg-preview {
       transform-origin: center center;
       transition: transform 0.2s ease-in-out;
+    }
+
+    .preview-container > svg,
+    .preview-container .preview-svg {
+      display: block;
+      max-width: 100%;
+      max-height: 100%;
+      border: 1px solid var(--border);
+      background: var(--preview-bg);
+    }
+
+    .preview-container > svg.preview-svg-auto-size,
+    .preview-container .preview-svg.preview-svg-auto-size {
+      width: 100%;
+      height: 100%;
     }
 
     .main-content {

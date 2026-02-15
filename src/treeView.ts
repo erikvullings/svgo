@@ -10,6 +10,11 @@ type UncontrolledInputAttrs = {
   type?: string;
 };
 
+type UncontrolledInputElement = HTMLInputElement & {
+  _uncontrolledAttrs?: UncontrolledInputAttrs;
+  _uncontrolledBound?: boolean;
+};
+
 type TreeNodeAttrs = {
   node: Element;
   path: string;
@@ -324,35 +329,47 @@ export function renderAttributeDialog(): m.Children {
 // Uncontrolled Input Component to prevent Mithril redraws from interfering with typing
 const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
   oncreate({ dom, attrs }: VnodeDOM<UncontrolledInputAttrs>) {
-    const input = dom as HTMLInputElement;
+    const input = dom as UncontrolledInputElement;
+    input._uncontrolledAttrs = attrs;
     input.value = attrs.value;
     input.size = Math.max(1, Math.min(20, input.value.length));
 
-    input.addEventListener("keydown", (e: KeyboardEvent) => {
-      e.stopPropagation();
-      if (e.key === "Escape") {
-        input.value = attrs.value;
-        input.blur();
-      }
-      if (e.key === "Enter") {
-        input.blur();
-      }
-    });
+    if (!input._uncontrolledBound) {
+      input._uncontrolledBound = true;
 
-    input.addEventListener("input", (e: Event) => {
-      const target = e.target as HTMLInputElement;
-      target.size = Math.max(1, Math.min(20, target.value.length));
-    });
+      input.addEventListener("keydown", (e: KeyboardEvent) => {
+        e.stopPropagation();
+        const currentAttrs = input._uncontrolledAttrs;
+        if (!currentAttrs) return;
 
-    input.addEventListener("change", () => {
-      attrs.type = "change"; // Signal change
-      if (input.value !== attrs.value) {
-        attrs.onChange(input.value);
-      }
-    });
+        if (e.key === "Escape") {
+          input.value = currentAttrs.value;
+          input.blur();
+        }
+        if (e.key === "Enter") {
+          input.blur();
+        }
+      });
+
+      input.addEventListener("input", (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        target.size = Math.max(1, Math.min(20, target.value.length));
+      });
+
+      input.addEventListener("change", () => {
+        const currentAttrs = input._uncontrolledAttrs;
+        if (!currentAttrs) return;
+
+        currentAttrs.type = "change"; // Signal change
+        if (input.value !== currentAttrs.value) {
+          currentAttrs.onChange(input.value);
+        }
+      });
+    }
   },
   onupdate({ dom, attrs }: VnodeDOM<UncontrolledInputAttrs>) {
-    const input = dom as HTMLInputElement;
+    const input = dom as UncontrolledInputElement;
+    input._uncontrolledAttrs = attrs;
     // Only update value from model if we are NOT currently editing/focused
     if (document.activeElement !== input) {
       input.value = attrs.value;

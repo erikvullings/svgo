@@ -6,7 +6,30 @@ export type PreviewPanelAttrs = {
   onResetZoom: () => void;
 };
 
+function updatePreviewSvgSizing(container: Element): void {
+  const svg = container.querySelector("svg");
+  if (!svg) return;
+
+  const hasWidth = svg.hasAttribute("width");
+  const hasHeight = svg.hasAttribute("height");
+
+  svg.classList.toggle("preview-svg", true);
+  svg.classList.toggle("preview-svg-auto-size", !hasWidth && !hasHeight);
+}
+
 export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
+  oncreate({ dom }) {
+    const container = (dom as Element).querySelector(".preview-container");
+    if (container) {
+      updatePreviewSvgSizing(container);
+    }
+  },
+  onupdate({ dom }) {
+    const container = (dom as Element).querySelector(".preview-container");
+    if (container) {
+      updatePreviewSvgSizing(container);
+    }
+  },
   view({ attrs }) {
     const { previewSvg, onZoomIn, onZoomOut, onResetZoom } = attrs;
 

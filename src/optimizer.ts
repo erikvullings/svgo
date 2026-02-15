@@ -579,25 +579,21 @@ class SVGOptimizer {
       return `M${dx} ${dy} l ${pairs.join(" l ")}`;
     }
 
+    function hasMarkerAttrs(element: Element) {
+      return (
+        element.hasAttribute("marker-start") ||
+        element.hasAttribute("marker-mid") ||
+        element.hasAttribute("marker-end")
+      );
+    }
+
     function canMergeGroup(group: Element) {
       const children = Array.from(group.children);
       if (children.length < 2) return false;
       if (!children.every((child) => child.tagName === "path")) return false;
       if (group.hasAttribute("transform")) return false;
-      if (
-        group.hasAttribute("marker-start") ||
-        group.hasAttribute("marker-mid") ||
-        group.hasAttribute("marker-end")
-      )
-        return false;
-      if (
-        children.some(
-          (child) =>
-            child.hasAttribute("marker-start") ||
-            child.hasAttribute("marker-mid") ||
-            child.hasAttribute("marker-end"),
-        )
-      ) {
+      if (hasMarkerAttrs(group)) return false;
+      if (children.some((child) => hasMarkerAttrs(child))) {
         return false;
       }
       return true;
@@ -613,106 +609,112 @@ class SVGOptimizer {
       return attrs;
     }
 
-    function hasConflictingChildAttrs(
+    function getPathMergeKey(
+      path: Element,
       groupAttrs: Record<string, string>,
-      child: Element,
-    ) {
-      return Object.entries(groupAttrs).some(([name, value]) => {
-        if (!child.hasAttribute(name)) return false;
-        return child.getAttribute(name) !== value;
+    ): {
+      key: string;
+      effectiveAttrs: Record<string, string>;
+      normalizedD: string;
+    } | null {
+      if (path.tagName !== "path") return null;
+      if (hasMarkerAttrs(path)) return null;
+
+      const d = path.getAttribute("d") || "";
+      const normalizedD = normalizePathStart(d);
+      if (!normalizedD) return null;
+
+      const childAttrs: Record<string, string> = {};
+      for (const attr of Array.from(path.attributes)) {
+        if (attr.name === "d") continue;
+        if (!isPresentationAttr(attr.name)) return null;
+        childAttrs[attr.name] = attr.value;
+      }
+
+      const effectiveAttrs: Record<string, string> = { ...groupAttrs };
+      Object.entries(childAttrs).forEach(([name, value]) => {
+        effectiveAttrs[name] = value;
       });
+
+      const key = JSON.stringify(
+        Object.entries(effectiveAttrs).sort(([a], [b]) => a.localeCompare(b)),
+      );
+
+      return { key, effectiveAttrs, normalizedD };
     }
 
-    function getSharedPresentationAttrs(
-      children: Element[],
+    function createMergedPathForRun(
+      run: Element[],
       groupAttrs: Record<string, string>,
-    ) {
-      const shared: Record<string, string> = {};
-      const hasValue: Record<string, boolean> = {};
+      effectiveAttrs: Record<string, string>,
+      normalizedDs: string[],
+    ): Element | null {
+      if (run.length < 2) return null;
 
-      for (const child of children) {
-        for (const attr of Array.from(child.attributes)) {
-          if (attr.name === "d") continue;
-          if (!isPresentationAttr(attr.name)) return null;
-          if (groupAttrs[attr.name] !== undefined) continue;
+      const merged = doc.createElementNS(SVG_NS, "path");
+      merged.setAttribute("d", normalizedDs.join(" "));
 
-          if (hasValue[attr.name] === undefined) {
-            hasValue[attr.name] = true;
-            shared[attr.name] = attr.value;
-          } else if (shared[attr.name] !== attr.value) {
-            return null;
-          }
+      Object.entries(effectiveAttrs).forEach(([name, value]) => {
+        if (groupAttrs[name] !== value) {
+          merged.setAttribute(name, value);
         }
+      });
+
+      const estimateOldSize = run.reduce(
+        (sum, element) => sum + element.outerHTML.length,
+        0,
+      );
+      const estimateNewSize = merged.outerHTML.length;
+      if (estimateNewSize >= estimateOldSize) {
+        return null;
       }
 
-      // Ensure all children have the same presentation attrs (no missing values)
-      const sharedKeys = Object.keys(shared);
-      for (const child of children) {
-        for (const key of sharedKeys) {
-          if (!child.hasAttribute(key)) {
-            return null;
-          }
-        }
-      }
-
-      return shared;
+      return merged;
     }
 
     function mergePaths(group: Element) {
       const groupAttrs = collectGroupAttrs(group);
       const children = Array.from(group.children) as Element[];
+      let mergedAny = false;
+      let i = 0;
 
-      if (
-        children.some((child) => hasConflictingChildAttrs(groupAttrs, child))
-      ) {
-        return false;
-      }
-
-      const normalized = [];
-      for (const child of children) {
-        const d = child.getAttribute("d") || "";
-        const normalizedD = normalizePathStart(d);
-        if (!normalizedD) return false;
-        normalized.push(normalizedD);
-      }
-
-      const sharedChildAttrs = getSharedPresentationAttrs(children, groupAttrs);
-      if (!sharedChildAttrs) return false;
-
-      const combined = normalized.join(" ");
-      const merged = doc.createElementNS(SVG_NS, "path");
-      merged.setAttribute("d", combined);
-
-      Object.entries(groupAttrs).forEach(([name, value]) => {
-        merged.setAttribute(name, value);
-      });
-
-      Object.entries(sharedChildAttrs).forEach(([name, value]) => {
-        if (!merged.hasAttribute(name)) {
-          merged.setAttribute(name, value);
+      while (i < children.length) {
+        const current = children[i];
+        const currentInfo = getPathMergeKey(current, groupAttrs);
+        if (!currentInfo) {
+          i++;
+          continue;
         }
-      });
 
-      if (children.length > 0) {
-        Array.from(children[0].attributes).forEach((attr) => {
-          if (attr.name === "d") return;
-          if (!isPresentationAttr(attr.name)) return;
-          if (merged.hasAttribute(attr.name)) return;
-          merged.setAttribute(attr.name, attr.value);
-        });
+        const run = [current];
+        const normalizedDs = [currentInfo.normalizedD];
+        let j = i + 1;
+
+        while (j < children.length) {
+          const next = children[j];
+          const nextInfo = getPathMergeKey(next, groupAttrs);
+          if (!nextInfo || nextInfo.key !== currentInfo.key) break;
+          run.push(next);
+          normalizedDs.push(nextInfo.normalizedD);
+          j++;
+        }
+
+        const merged = createMergedPathForRun(
+          run,
+          groupAttrs,
+          currentInfo.effectiveAttrs,
+          normalizedDs,
+        );
+        if (merged) {
+          run[0].parentElement?.insertBefore(merged, run[0]);
+          run.forEach((element) => element.remove());
+          mergedAny = true;
+        }
+
+        i = j;
       }
 
-      const estimateOldSize = group.outerHTML.length;
-      const estimateNewSize = merged.outerHTML.length;
-      if (estimateNewSize >= estimateOldSize) {
-        return false;
-      }
-
-      if (group.parentElement) {
-        group.parentElement.insertBefore(merged, group);
-        group.remove();
-      }
-      return true;
+      return mergedAny;
     }
 
     const groups = Array.from(doc.querySelectorAll("g"));
