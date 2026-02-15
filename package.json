@@ -18,12 +18,25 @@
   },
   "license": "MIT",
   "author": "Erik Vullings <erik.vullings@gmail.com>",
-  "type": "commonjs",
+  "type": "module",
   "main": "docs/index.html",
   "directories": {
     "doc": "docs"
   },
   "scripts": {
-    "start": "cd docs && http-server ."
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "vite"
+  },
+  "dependencies": {
+    "mithril": "^2.3.8",
+    "svgo": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/mithril": "^2.2.7",
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1"
   }
 }
