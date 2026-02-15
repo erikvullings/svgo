@@ -1549,6 +1549,22 @@
         }
       }
 
+      autocropCurrentSvg() {
+        const sourceSvg = this.getSourceSvg();
+        if (!sourceSvg || !sourceSvg.trim()) return;
+        const croppedSvg = this.autocropSvg(sourceSvg, 3);
+        this.originalSvg = croppedSvg;
+        if (this.editor) {
+          this.options.isUpdatingFromTree = true;
+          this.editor.setValue(this.originalSvg);
+          this.options.isUpdatingFromTree = false;
+        }
+        this.updateTreeDoc();
+        this.optimizeSvg();
+        this.saveToHistory();
+        m.redraw();
+      }
+
       roundNumbers(str, precision) {
         return this.roundNumbersWithPrecision(str, precision, precision);
       }
@@ -2527,6 +2543,44 @@
         return new XMLSerializer().serializeToString(doc);
       }
 
+      /**
+       * Crops the SVG viewBox to its content bounds with a margin.
+       * @param {string} svg The SVG content as a string.
+       * @param {number} margin The margin (in user units) to add around the content.
+       * @returns {string} The cropped SVG string.
+       */
+      autocropSvg(svg, margin = 3) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svg, 'image/svg+xml');
+        const svgElement = doc.documentElement;
+
+        if (svgElement.tagName !== 'svg') {
+          console.error("The provided SVG string does not contain an SVG element as its root.");
+          return svg;
+        }
+
+        const contentBBox = this.calculateContentBBox(svg);
+        if (!contentBBox || contentBBox.width <= 0 || contentBBox.height <= 0) {
+          console.warn("Could not calculate content BBox for autocrop. Leaving SVG unchanged.");
+          return svg;
+        }
+
+        const safeMargin = Number.isFinite(margin) ? margin : 0;
+        const x1 = Math.floor(contentBBox.x - safeMargin);
+        const y1 = Math.floor(contentBBox.y - safeMargin);
+        const x2 = Math.ceil(contentBBox.x + contentBBox.width + safeMargin);
+        const y2 = Math.ceil(contentBBox.y + contentBBox.height + safeMargin);
+
+        let width = x2 - x1;
+        let height = y2 - y1;
+
+        if (width <= 0) width = 1;
+        if (height <= 0) height = 1;
+
+        svgElement.setAttribute('viewBox', `${x1} ${y1} ${width} ${height}`);
+        return new XMLSerializer().serializeToString(doc);
+      }
+
       sanitizeSvg(svg) {
         if (!svg || typeof svg !== 'string') return svg;
 
@@ -3388,6 +3442,10 @@
               disabled: sourceSvg && sourceSvg.trim().length > 0 ? undefined : 'disabled',
               onclick: () => optimizer.loadOptimizedFile(),
             }, 'Optimize'),
+            m('button[type=button][title=Autocrop viewBox to content]', {
+              disabled: sourceSvg && sourceSvg.trim().length > 0 ? undefined : 'disabled',
+              onclick: () => optimizer.autocropCurrentSvg(),
+            }, 'Autocrop'),
             m('button[type=button][title=Undo]', {
               disabled: !optimizer.canUndo(),
               onclick: () => {
