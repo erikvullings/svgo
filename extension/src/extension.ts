@@ -40,6 +40,7 @@ function isSvgDocument(doc: vscode.TextDocument): boolean {
 }
 
 function showPanel(context: vscode.ExtensionContext, document?: vscode.TextDocument) {
+  const webviewRootUri = getWebviewRootUri(context);
   if (currentPanel) {
     currentPanel.reveal(vscode.ViewColumn.Beside);
   } else {
@@ -50,7 +51,7 @@ function showPanel(context: vscode.ExtensionContext, document?: vscode.TextDocum
       {
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [getDocsUri(context)]
+        localResourceRoots: [webviewRootUri]
       }
     );
 
@@ -93,17 +94,17 @@ function showPanel(context: vscode.ExtensionContext, document?: vscode.TextDocum
   }
 }
 
-function getDocsUri(context: vscode.ExtensionContext): vscode.Uri {
-  return vscode.Uri.joinPath(context.extensionUri, '..', 'docs');
+function getWebviewRootUri(context: vscode.ExtensionContext): vscode.Uri {
+  return vscode.Uri.joinPath(context.extensionUri, 'webview');
 }
 
 function getWebviewHtml(webview: vscode.Webview, context: vscode.ExtensionContext): string {
-  const docsUri = getDocsUri(context);
-  const indexUri = vscode.Uri.joinPath(docsUri, 'index.html');
+  const webviewRootUri = getWebviewRootUri(context);
+  const indexUri = vscode.Uri.joinPath(webviewRootUri, 'index.html');
   let html = fs.readFileSync(indexUri.fsPath, 'utf8');
 
   const nonce = getNonce();
-  const assetsUri = webview.asWebviewUri(vscode.Uri.joinPath(docsUri, 'assets'));
+  const assetsUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewRootUri, 'assets'));
 
   html = html.replace(/(src|href)=\"\/?assets\/(.*?)\"/g, (_m, attr, file) => {
     return `${attr}="${assetsUri}/${file}"`;
@@ -121,7 +122,7 @@ function getWebviewHtml(webview: vscode.Webview, context: vscode.ExtensionContex
   ];
 
   staticFiles.forEach((file) => {
-    const fileUri = webview.asWebviewUri(vscode.Uri.joinPath(docsUri, file));
+    const fileUri = webview.asWebviewUri(vscode.Uri.joinPath(webviewRootUri, file));
     html = html.replace(new RegExp(file, 'g'), fileUri.toString());
   });
 

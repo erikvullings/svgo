@@ -23,7 +23,9 @@
   },
   "scripts": {
     "build": "tsc -p .",
-    "watch": "tsc -p . -w"
+    "watch": "tsc -p . -w",
+    "bundle-webview": "node ./scripts/bundle-webview.mjs",
+    "vscode:prepublish": "pnpm --dir .. build && npm run build && npm run bundle-webview"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
