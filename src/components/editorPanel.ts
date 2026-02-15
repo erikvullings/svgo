@@ -17,30 +17,29 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
         m("span", "Source SVG"),
         sourceSvg ? m("span", `${sourceSvg.split("\n").length} lines`) : null,
         m(
-          "div",
-          { style: "display: flex; gap: 0.5rem;" },
+          "div.editor-actions",
           [
             m(
-              "button",
+              "button.view-toggle",
               {
-                style: `background: ${optimizer.options.viewMode === "code" ? "#4fc3f7" : "#444"}; font-size: 0.8rem; padding: 0.2rem 0.6rem;`,
+                class:
+                  optimizer.options.viewMode === "code" ? "active" : "",
                 onclick: () => (optimizer.options.viewMode = "code"),
               },
               "Code",
             ),
             m(
-              "button",
+              "button.view-toggle",
               {
-                style: `background: ${optimizer.options.viewMode === "tree" ? "#4fc3f7" : "#444"}; font-size: 0.8rem; padding: 0.2rem 0.6rem;`,
+                class:
+                  optimizer.options.viewMode === "tree" ? "active" : "",
                 onclick: () => (optimizer.options.viewMode = "tree"),
               },
               "Tree",
             ),
             m(
-              "button",
+              "button.copy-btn",
               {
-                style:
-                  "background: #444; font-size: 0.8rem; padding: 0.2rem 0.6rem; cursor: pointer; border: none; border-radius: 4px; color: #e0e0e0; display: flex; align-items: center; gap: 0.3rem;",
                 onclick: () => onCopy(),
                 title: "Copy to clipboard",
               },
@@ -73,17 +72,19 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
       ]),
       m(".editor-container", [
         m("div#editor", {
-          style: `height: 100%; ${!optimizer.editorReady || optimizer.options.viewMode !== "code" ? "display: none;" : ""}`,
+          class:
+            !optimizer.editorReady || optimizer.options.viewMode !== "code"
+              ? "editor-hidden"
+              : "",
         }),
         !optimizer.editorReady
           ? m(
-              "div",
-              {
-                style:
-                  "display: flex; align-items: center; justify-content: center; height: 100%; color: #888;",
-              },
-              "Initializing editor...",
-            )
+            "div",
+            {
+                class: "editor-loading",
+            },
+            "Initializing editor...",
+          )
           : null,
         optimizer.options.viewMode === "tree" ? m(TreeView) : null,
       ]),

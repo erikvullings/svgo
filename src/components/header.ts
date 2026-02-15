@@ -9,7 +9,7 @@ export type HeaderStats = {
 
 export type HeaderAttrs = {
   stats: HeaderStats;
-  theme: "dark" | "light";
+  theme: "dark" | "light" | "auto";
   onToggleTheme: () => void;
 };
 
@@ -42,7 +42,7 @@ export const Header: m.Component<HeaderAttrs> = {
       m(
         "button.theme-toggle",
         { onclick: onToggleTheme, title: "Toggle theme" },
-        theme === "dark" ? "Light" : "Dark",
+        theme === "dark" ? "Light" : theme === "light" ? "Auto" : "Dark",
       ),
     ]);
   },

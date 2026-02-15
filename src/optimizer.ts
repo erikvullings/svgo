@@ -50,6 +50,7 @@ class SVGOptimizer {
   optimizedSvg: string;
   editor: MonacoEditorInstance | null;
   editorReady: boolean;
+  editorTheme: "dark" | "light";
   history: HistoryEntry[];
   historyPointer: number;
   maxHistory: number;
@@ -64,6 +65,7 @@ class SVGOptimizer {
     this.optimizedSvg = "";
     this.editor = null;
     this.editorReady = false;
+    this.editorTheme = "dark";
     this.history = []; // Store history for undo/redo
     this.historyPointer = -1; // Pointer to current position in history
     this.maxHistory = 20; // Maximum number of history entries
@@ -160,7 +162,7 @@ class SVGOptimizer {
                 this.originalSvg ||
                 "<!-- Paste your SVG code here or load a file -->",
               language: "xml",
-              theme: "vs-dark",
+              theme: this.editorTheme === "dark" ? "vs-dark" : "vs",
               automaticLayout: true,
               minimap: { enabled: false },
               wordWrap: "on",
@@ -178,6 +180,7 @@ class SVGOptimizer {
             });
 
             this.editorReady = true;
+            this.applyEditorTheme();
             // Save initial state after editor is initialized
             if (this.history.length === 0) {
               this.saveToHistory();
@@ -192,6 +195,18 @@ class SVGOptimizer {
         checkContainer();
       });
     });
+  }
+
+  applyEditorTheme(): void {
+    if (!this.editor) return;
+    if (typeof monaco === "undefined") return;
+    const themeName = this.editorTheme === "dark" ? "vs-dark" : "vs";
+    monaco.editor.setTheme(themeName);
+  }
+
+  setEditorTheme(theme: "dark" | "light"): void {
+    this.editorTheme = theme;
+    this.applyEditorTheme();
   }
 
   shouldPreserveAttribute(name: string): boolean {

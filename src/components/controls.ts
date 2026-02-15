@@ -188,8 +188,8 @@ export const Controls: m.Component<ControlsAttrs> = {
           }),
           m("label", { for: "remove-styling" }, "Remove styling"),
         ]),
-        m(".checkbox-group", [
-          m("label", { style: "margin-right: 1rem; font-weight: 600;" }, "Grouping:"),
+        m(".checkbox-group.grouping", [
+          m("label", { class: "grouping-label" }, "Grouping:"),
           m("input[type=radio]", {
             id: "grouping-none",
             name: "grouping-mode",
@@ -205,7 +205,7 @@ export const Controls: m.Component<ControlsAttrs> = {
               }
             },
           }),
-          m("label", { for: "grouping-none", style: "margin-right: 1rem;" }, "None"),
+          m("label", { for: "grouping-none", class: "grouping-option" }, "None"),
           m("input[type=radio]", {
             id: "grouping-group",
             name: "grouping-mode",
@@ -221,7 +221,7 @@ export const Controls: m.Component<ControlsAttrs> = {
               }
             },
           }),
-          m("label", { for: "grouping-group", style: "margin-right: 1rem;" }, "Group similar"),
+          m("label", { for: "grouping-group", class: "grouping-option" }, "Group similar"),
           m("input[type=radio]", {
             id: "grouping-remove",
             name: "grouping-mode",

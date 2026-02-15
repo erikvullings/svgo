@@ -14,11 +14,21 @@
       --accent: #4fc3f7;
       --accent-hover: #29b6f6;
       --button-text: #1a1a1a;
+      --button-disabled: #7a7a7a;
       --input-bg: #404040;
       --input-border: #555;
       --preview-bg: #2a2a2a;
       --danger: #f44336;
+      --danger-hover: #ff6b6b;
       --success: #4caf50;
+      --success-hover: #3e8e41;
+      --error-bg: #330000;
+      --error-border: #660000;
+      --highlight: #00ffff;
+      --highlight-shadow-1: #00ffffaa;
+      --highlight-shadow-2: #00ffff55;
+      --highlight-red: #ff4d4f;
+      --highlight-yellow: #ffff00;
     }
 
     body.theme-light {
@@ -31,11 +41,21 @@
       --accent: #0ea5e9;
       --accent-hover: #0284c7;
       --button-text: #0b1220;
+      --button-disabled: #b7bec7;
       --input-bg: #ffffff;
       --input-border: #cfd8dc;
       --preview-bg: #ffffff;
       --danger: #d32f2f;
+      --danger-hover: #ef5350;
       --success: #2e7d32;
+      --success-hover: #1b5e20;
+      --error-bg: #fde8e8;
+      --error-border: #f8b4b4;
+      --highlight: #00a6c7;
+      --highlight-shadow-1: #00a6c7aa;
+      --highlight-shadow-2: #00a6c755;
+      --highlight-red: #d32f2f;
+      --highlight-yellow: #f9a825;
     }
 
     body {
@@ -55,6 +75,21 @@
       align-items: center;
       flex-wrap: wrap;
       gap: 1rem;
+    }
+
+    .theme-toggle {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      font-size: 0.85rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .theme-toggle:hover {
+      background: var(--accent-hover);
+      color: var(--button-text);
     }
 
     .title {
@@ -144,7 +179,7 @@
     }
 
     button:disabled {
-      background: #9e9e9e !important;
+      background: var(--button-disabled) !important;
       cursor: text;
     }
 
@@ -158,6 +193,19 @@
       flex-wrap: wrap;
       gap: 1rem;
       align-items: center;
+    }
+
+    .grouping-label {
+      color: var(--text-muted);
+      font-weight: 600;
+    }
+
+    .grouping-option {
+      cursor: pointer;
+    }
+
+    .grouping-option input {
+      margin-right: 0.35rem;
     }
 
     .checkbox-group {
@@ -212,6 +260,42 @@
       height: 42px;
     }
 
+    .editor-actions {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .view-toggle {
+      background: var(--panel-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .view-toggle.active {
+      background: var(--accent);
+      color: var(--button-text);
+      border-color: var(--accent);
+    }
+
+    .copy-btn {
+      padding: 0.25rem 0.6rem;
+      font-size: 0.85rem;
+    }
+
+    .editor-hidden {
+      display: none;
+    }
+
+    .editor-loading {
+      padding: 1rem;
+      color: var(--text-muted);
+    }
+
     .download-btn {
       background: var(--success);
       color: white;
@@ -223,7 +307,7 @@
     }
 
     .download-btn:hover {
-      background: #3e8e41;
+      background: var(--success-hover);
     }
 
     .editor-container {
@@ -231,6 +315,14 @@
       position: relative;
       padding-top: 10px;
       overflow: hidden;
+    }
+
+    .editor-container #editor {
+      position: absolute;
+      top: 10px;
+      left: 0;
+      right: 0;
+      bottom: 0;
     }
 
     .monaco-editor .lineHighlight,
@@ -253,18 +345,31 @@
       justify-content: center;
     }
 
+    .preview-controls {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .preview-placeholder {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+      text-align: center;
+      padding: 1rem;
+    }
+
     .svg-preview {
       max-width: 100%;
       max-height: 100%;
       border: 1px solid var(--border);
-      background: white;
+      background: var(--preview-bg);
     }
 
     .error {
       color: var(--danger);
       padding: 1rem;
-      background: #330000;
-      border: 1px solid #660000;
+      background: var(--error-bg);
+      border: 1px solid var(--error-border);
       border-radius: 4px;
       margin: 1rem;
     }
@@ -308,8 +413,11 @@
       overflow: auto;
     }
 
-    #dragbar {
+    .dragbar {
       z-index: 10;
+      width: 6px;
+      cursor: col-resize;
+      background: var(--border);
     }
 
     #left-panel,
@@ -499,7 +607,7 @@
     }
 
     .attr-remove:hover {
-      color: #ff6b6b;
+      color: var(--danger-hover);
     }
 
     .node-controls {
@@ -540,6 +648,14 @@
 
     .control-btn:hover {
       background: var(--accent);
+    }
+
+    .control-btn.danger {
+      color: var(--danger);
+    }
+
+    .tree-node-header.text-node {
+      color: var(--accent);
     }
 
     .attr-dialog-backdrop {
@@ -621,7 +737,7 @@
 
     /* Base highlight for text – works on both dark & light backgrounds */
     .highlighted-preview {
-      fill: #00ffff !important;
+      fill: var(--highlight) !important;
       /* vivid cyan – excellent contrast */
       font-weight: bold !important;
       /* makes it stand out more */
@@ -632,11 +748,11 @@
     /* Strong glow using drop-shadow filter – very reliable for SVG */
     .highlighted-preview {
       filter:
-        drop-shadow(0 0 3px #00ffff)
+        drop-shadow(0 0 3px var(--highlight))
         /* tight inner/near glow */
-        drop-shadow(0 0 8px #00ffffaa)
+        drop-shadow(0 0 8px var(--highlight-shadow-1))
         /* medium glow */
-        drop-shadow(0 0 14px #00ffff55);
+        drop-shadow(0 0 14px var(--highlight-shadow-2));
       /* soft outer halo */
     }
 
@@ -653,22 +769,23 @@
 
     /* Red attention style (good for warnings/errors) */
     .highlighted-preview.red-alert {
-      fill: #ff4d4f !important;
+      fill: var(--highlight-red) !important;
       filter:
-        drop-shadow(0 0 4px #ff4d4f) drop-shadow(0 0 10px #ff4d4faa);
+        drop-shadow(0 0 4px var(--highlight-red))
+        drop-shadow(0 0 10px var(--highlight-shadow-1));
     }
 
     /* Yellow high-contrast style (pops everywhere) */
     .highlighted-preview.yellow-pop {
-      fill: #ffff00 !important;
-      filter: drop-shadow(0 0 6px #ffff0088);
+      fill: var(--highlight-yellow) !important;
+      filter: drop-shadow(0 0 6px var(--highlight-shadow-1));
     }
 
     text.highlighted-preview,
     .highlighted-preview text {
-      fill: #00ffff !important;
+      fill: var(--highlight) !important;
       /* or your preferred vivid color */
-      stroke: black !important;
+      stroke: #000 !important;
       /* or #0008 for softer outline */
       stroke-width: 2.5px !important;
       /* 1.8–3.5 px depending on font-size */

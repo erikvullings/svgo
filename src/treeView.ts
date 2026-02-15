@@ -521,9 +521,8 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               ),
 
             m(
-              "button.control-btn",
+              "button.control-btn.danger",
               {
-                style: "color: #f44336;",
                 onclick: (e) => {
                   e.stopPropagation();
                   node.remove();
@@ -549,7 +548,6 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
                 ".tree-node-header",
                 {
                   class: "text-node",
-                  style: "color: #9cdcfe;",
                   oncreate: (vnode) => {
                     const dom = vnode.dom as HTMLElement;
                     dom.onclick = (e) => {

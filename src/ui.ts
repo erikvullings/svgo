@@ -13,17 +13,31 @@ let isPanning = false;
 let startX = 0;
 let startY = 0;
 
-let theme: "dark" | "light" =
-  (localStorage.getItem("svgo-theme") as "dark" | "light") || "dark";
+let theme: "dark" | "light" | "auto" =
+  (localStorage.getItem("svgo-theme") as "dark" | "light" | "auto") || "dark";
 
-function applyTheme(nextTheme: "dark" | "light") {
+function resolveTheme(nextTheme: "dark" | "light" | "auto") {
+  if (nextTheme === "auto") {
+    return window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  }
+  return nextTheme;
+}
+
+function applyTheme(nextTheme: "dark" | "light" | "auto") {
   theme = nextTheme;
-  document.body.classList.toggle("theme-light", theme === "light");
+  const resolved = resolveTheme(theme);
+  document.body.classList.toggle("theme-light", resolved === "light");
   localStorage.setItem("svgo-theme", theme);
+  optimizer.setEditorTheme(resolved);
 }
 
 function toggleTheme() {
-  applyTheme(theme === "dark" ? "light" : "dark");
+  const next =
+    theme === "dark" ? "light" : theme === "light" ? "auto" : "dark";
+  applyTheme(next);
 }
 
 function applyTransform(): void {
@@ -125,6 +139,18 @@ export const App: m.Component = {
 
     applyTheme(theme);
 
+    if (window.matchMedia) {
+      const media = window.matchMedia("(prefers-color-scheme: dark)");
+      const handleChange = () => {
+        if (theme === "auto") applyTheme(theme);
+      };
+      if ("addEventListener" in media) {
+        media.addEventListener("change", handleChange);
+      } else if ("addListener" in media) {
+        media.addListener(handleChange);
+      }
+    }
+
     const dropZone = document.body;
     dropZone.addEventListener("dragover", (e) => {
       e.preventDefault();
@@ -191,9 +217,7 @@ export const App: m.Component = {
         m(".editor-panel#left-panel", [
           m(EditorPanel, { sourceSvg, isCopied, onCopy: copyToClipboard }),
         ]),
-        m("div#dragbar", {
-          style: "width: 6px; cursor: col-resize; background: #666;",
-        }),
+        m("div#dragbar.dragbar"),
         m(PreviewPanel, {
           optimizer,
           previewSvg,

@@ -17,7 +17,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
       m(".panel-header", [
         m("span", "Optimized SVG"),
         previewSvg &&
-          m("div", { style: "display:flex; gap:0.5rem; align-items:center;" }, [
+          m("div.preview-controls", [
             m("button", { onclick: onZoomIn }, "+"),
             m("button", { onclick: onZoomOut }, "-"),
             m("button", { onclick: onResetZoom }, "Reset"),
@@ -34,11 +34,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
       m(".preview-container", [
         previewSvg
           ? m.trust(previewSvg)
-          : m(
-              "div",
-              { style: "color: #888; text-align: center" },
-              "Preview will appear here",
-            ),
+          : m("div.preview-placeholder", "Preview will appear here"),
       ]),
     ]);
   },
