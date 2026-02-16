@@ -167,6 +167,9 @@ const attributeDialogState: {
   name: string;
   value: string;
   suggestions: string[];
+  filteredSuggestions: string[];
+  selectedSuggestionIndex: number;
+  showSuggestionList: boolean;
 } = {
   isOpen: false,
   path: null,
@@ -174,6 +177,9 @@ const attributeDialogState: {
   name: "",
   value: "",
   suggestions: [],
+  filteredSuggestions: [],
+  selectedSuggestionIndex: 0,
+  showSuggestionList: false,
 };
 
 function getAttributeSuggestionsForElement(element: Element) {
@@ -195,6 +201,12 @@ function openAttributeDialog(path: string) {
   attributeDialogState.name = "";
   attributeDialogState.value = "";
   attributeDialogState.suggestions = getAttributeSuggestionsForElement(element);
+  attributeDialogState.filteredSuggestions = getRankedAttributeSuggestions(
+    "",
+    attributeDialogState.suggestions,
+  );
+  attributeDialogState.selectedSuggestionIndex = 0;
+  attributeDialogState.showSuggestionList = false;
   m.redraw();
 }
 
@@ -205,7 +217,145 @@ function closeAttributeDialog() {
   attributeDialogState.name = "";
   attributeDialogState.value = "";
   attributeDialogState.suggestions = [];
+  attributeDialogState.filteredSuggestions = [];
+  attributeDialogState.selectedSuggestionIndex = 0;
+  attributeDialogState.showSuggestionList = false;
   m.redraw();
+}
+
+function isSubsequence(query: string, target: string): boolean {
+  if (!query) return true;
+  let qi = 0;
+  for (let i = 0; i < target.length; i++) {
+    if (target[i] === query[qi]) {
+      qi++;
+      if (qi === query.length) return true;
+    }
+  }
+  return false;
+}
+
+function getSuggestionScore(query: string, candidate: string): number {
+  const q = query.toLowerCase().trim();
+  const c = candidate.toLowerCase();
+  if (!q) return 0;
+  if (c === q) return 1000;
+  if (c.startsWith(q)) return 900 - (c.length - q.length);
+  if (c.includes(q)) return 700 - c.indexOf(q);
+
+  const queryTokens = q.split(/[^a-z0-9]+/).filter(Boolean);
+  const candidateTokens = c.split(/[^a-z0-9]+/).filter(Boolean);
+
+  if (queryTokens.length > 1 && candidateTokens.length >= queryTokens.length) {
+    const positionalPrefixMatch = queryTokens.every((token, index) => {
+      const candidateToken = candidateTokens[index];
+      return Boolean(candidateToken && candidateToken.startsWith(token));
+    });
+    if (positionalPrefixMatch) {
+      return 850 - (candidateTokens.length - queryTokens.length);
+    }
+  }
+
+  if (queryTokens.length > 0) {
+    const tokenMatch = queryTokens.every((token) =>
+      candidateTokens.some(
+        (candidateToken) =>
+          candidateToken.startsWith(token) || candidateToken.includes(token),
+      ),
+    );
+    if (tokenMatch) return 500 - queryTokens.length;
+  }
+
+  const compactQuery = q.replace(/[^a-z0-9]/g, "");
+  const compactCandidate = c.replace(/[^a-z0-9]/g, "");
+  if (compactQuery && isSubsequence(compactQuery, compactCandidate)) {
+    return 300 - (compactCandidate.length - compactQuery.length);
+  }
+
+  return -1;
+}
+
+function getRankedAttributeSuggestions(
+  query: string,
+  suggestions: string[],
+): string[] {
+  const ranked = suggestions
+    .map((suggestion) => ({
+      suggestion,
+      score: getSuggestionScore(query, suggestion),
+    }))
+    .filter((item) => query.trim() === "" || item.score >= 0)
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.suggestion.localeCompare(b.suggestion);
+    })
+    .slice(0, 12)
+    .map((item) => item.suggestion);
+
+  return ranked;
+}
+
+function updateAttributeSuggestionState(preferredSuggestion?: string): void {
+  const ranked = getRankedAttributeSuggestions(
+    attributeDialogState.name,
+    attributeDialogState.suggestions,
+  );
+  attributeDialogState.filteredSuggestions = ranked;
+
+  if (ranked.length === 0) {
+    attributeDialogState.selectedSuggestionIndex = -1;
+    return;
+  }
+
+  if (preferredSuggestion) {
+    const preferredIndex = ranked.indexOf(preferredSuggestion);
+    if (preferredIndex >= 0) {
+      attributeDialogState.selectedSuggestionIndex = preferredIndex;
+      return;
+    }
+  }
+
+  const current = Math.max(
+    0,
+    Math.min(attributeDialogState.selectedSuggestionIndex, ranked.length - 1),
+  );
+  attributeDialogState.selectedSuggestionIndex = current;
+}
+
+function syncDialogValueFromExistingAttribute(): void {
+  const doc = optimizer.options.treeDoc;
+  const element = getElementByPath(
+    doc as Document,
+    attributeDialogState.path as string,
+  );
+  if (!element) return;
+
+  const existingValue = element.getAttribute(attributeDialogState.name.trim());
+  if (existingValue !== null && attributeDialogState.value === "") {
+    attributeDialogState.value = existingValue;
+  }
+}
+
+function acceptSelectedAttributeSuggestion(): boolean {
+  const { filteredSuggestions, selectedSuggestionIndex } = attributeDialogState;
+  if (
+    filteredSuggestions.length === 0 ||
+    selectedSuggestionIndex < 0 ||
+    selectedSuggestionIndex >= filteredSuggestions.length
+  ) {
+    return false;
+  }
+
+  const selected = filteredSuggestions[selectedSuggestionIndex];
+  if (!selected || selected === attributeDialogState.name) {
+    return false;
+  }
+
+  attributeDialogState.name = selected;
+  updateAttributeSuggestionState(selected);
+  syncDialogValueFromExistingAttribute();
+  attributeDialogState.showSuggestionList = false;
+  return true;
 }
 
 function applyAttributeDialog() {
@@ -248,49 +398,107 @@ export function renderAttributeDialog(): m.Children {
           m(".field", [
             m("label", "Attribute"),
             m("input#attr-name-input", {
-              list: "attr-suggestions",
               value: attributeDialogState.name,
               oncreate: ({ dom }: VnodeDOM) =>
                 (dom as HTMLInputElement).focus(),
+              onfocus: () => {
+                attributeDialogState.showSuggestionList =
+                  attributeDialogState.name.trim() !== "";
+              },
               oninput: (e: Event) => {
                 attributeDialogState.name = (
                   e.target as HTMLInputElement
                 ).value;
-                const doc = optimizer.options.treeDoc;
-                const element = getElementByPath(
-                  doc as Document,
-                  attributeDialogState.path as string,
-                );
-                if (element) {
-                  const existingValue = element.getAttribute(
-                    attributeDialogState.name.trim(),
-                  );
-                  if (
-                    existingValue !== null &&
-                    attributeDialogState.value === ""
-                  ) {
-                    attributeDialogState.value = existingValue;
-                  }
-                }
+                attributeDialogState.showSuggestionList =
+                  attributeDialogState.name.trim() !== "";
+                updateAttributeSuggestionState();
+                syncDialogValueFromExistingAttribute();
               },
               onkeydown: (e: KeyboardEvent) => {
+                e.stopPropagation();
+
                 if (e.key === "Escape") {
                   e.preventDefault();
                   closeAttributeDialog();
+                  return;
                 }
+
+                if (e.key === "ArrowDown") {
+                  attributeDialogState.showSuggestionList =
+                    attributeDialogState.name.trim() !== "";
+                  if (attributeDialogState.filteredSuggestions.length > 0) {
+                    e.preventDefault();
+                    attributeDialogState.selectedSuggestionIndex =
+                      (attributeDialogState.selectedSuggestionIndex + 1) %
+                      attributeDialogState.filteredSuggestions.length;
+                  }
+                  return;
+                }
+
+                if (e.key === "ArrowUp") {
+                  attributeDialogState.showSuggestionList =
+                    attributeDialogState.name.trim() !== "";
+                  if (attributeDialogState.filteredSuggestions.length > 0) {
+                    e.preventDefault();
+                    const count = attributeDialogState.filteredSuggestions.length;
+                    attributeDialogState.selectedSuggestionIndex =
+                      (attributeDialogState.selectedSuggestionIndex - 1 + count) %
+                      count;
+                  }
+                  return;
+                }
+
+                if (e.key === "Tab") {
+                  if (acceptSelectedAttributeSuggestion()) {
+                    e.preventDefault();
+                  }
+                  return;
+                }
+
                 if (e.key === "Enter") {
                   e.preventDefault();
+                  if (acceptSelectedAttributeSuggestion()) return;
                   applyAttributeDialog();
                 }
               },
             }),
+            attributeDialogState.showSuggestionList &&
+              attributeDialogState.name.trim() !== "" &&
+              attributeDialogState.filteredSuggestions.length > 0 &&
+              m(
+                ".attr-suggestion-list",
+                attributeDialogState.filteredSuggestions.map(
+                  (suggestion, index) =>
+                    m(
+                      "button.attr-suggestion-item",
+                      {
+                        class:
+                          index === attributeDialogState.selectedSuggestionIndex
+                            ? "selected"
+                            : "",
+                        type: "button",
+                        onmouseenter: () => {
+                          attributeDialogState.selectedSuggestionIndex = index;
+                        },
+                        onmousedown: (e: MouseEvent) => {
+                          e.preventDefault();
+                        },
+                        onclick: () => {
+                          attributeDialogState.name = suggestion;
+                          updateAttributeSuggestionState(suggestion);
+                          syncDialogValueFromExistingAttribute();
+                          attributeDialogState.showSuggestionList = false;
+                          const nameInput = document.getElementById(
+                            "attr-name-input",
+                          ) as HTMLInputElement | null;
+                          nameInput?.focus();
+                        },
+                      },
+                      suggestion,
+                    ),
+                ),
+              ),
           ]),
-          m(
-            "datalist#attr-suggestions",
-            attributeDialogState.suggestions.map((attr) =>
-              m("option", { value: attr }),
-            ),
-          ),
           m(".field", [
             m("label", "Value"),
             m("input", {
@@ -301,6 +509,7 @@ export function renderAttributeDialog(): m.Children {
                 ).value;
               },
               onkeydown: (e: KeyboardEvent) => {
+                e.stopPropagation();
                 if (e.key === "Escape") {
                   e.preventDefault();
                   closeAttributeDialog();

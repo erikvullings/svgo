@@ -878,6 +878,7 @@
       flex-direction: column;
       gap: 0.2rem;
       margin-bottom: 0.6rem;
+      position: relative;
     }
 
     .attr-dialog label {
@@ -920,6 +921,36 @@
       background: var(--accent);
       color: var(--button-text);
       font-weight: 600;
+    }
+
+    .attr-suggestion-list {
+      margin-top: 0.35rem;
+      border: 1px solid var(--input-border);
+      border-radius: 4px;
+      background: var(--input-bg);
+      max-height: 160px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 0.2rem;
+      gap: 0.1rem;
+    }
+
+    .attr-suggestion-item {
+      background: transparent;
+      color: var(--text);
+      border: none;
+      text-align: left;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.4rem;
+      border-radius: 3px;
+      margin-right: 0;
+    }
+
+    .attr-suggestion-item:hover,
+    .attr-suggestion-item.selected {
+      background: var(--accent);
+      color: var(--button-text);
     }
 
     /* Base highlight for text – works on both dark & light backgrounds */

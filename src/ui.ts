@@ -287,6 +287,7 @@ export function initializeGlobalHandlers() {
     const target = e.target as HTMLElement | null;
     if (!target) return;
     if (["INPUT", "TEXTAREA"].includes(target.tagName)) return;
+    if (target.closest && target.closest(".attr-dialog-backdrop")) return;
     if (target.closest && target.closest("#editor")) return;
 
     const isMac = navigator.platform.toUpperCase().includes("MAC");
