@@ -130,10 +130,11 @@ class SVGOptimizer {
   }
 
   getPreviewSvg(): string {
+    const sourceSvg = this.getSourceSvg();
     if (!this.isOptimizationEnabled()) {
-      return this.getSourceSvg();
+      return this.normalizeNamespaces(sourceSvg);
     }
-    return this.optimizedSvg || this.getSourceSvg();
+    return this.optimizedSvg || this.normalizeNamespaces(sourceSvg);
   }
 
   async initializeEditor(): Promise<void> {
@@ -172,7 +173,14 @@ class SVGOptimizer {
             this.editor.onDidChangeModelContent(() => {
               if (this.options.isUpdatingFromTree || this.isRestoringHistory)
                 return;
-              this.originalSvg = this.editor.getValue();
+              const currentValue = this.editor.getValue();
+              const normalizedValue = this.normalizeNamespaces(currentValue);
+              if (normalizedValue !== currentValue) {
+                this.options.isUpdatingFromTree = true;
+                this.editor.setValue(normalizedValue);
+                this.options.isUpdatingFromTree = false;
+              }
+              this.originalSvg = normalizedValue;
               this.updateTreeDoc();
               this.optimizeSvg();
               this.saveToHistory(); // Save to history after editing
@@ -275,7 +283,7 @@ class SVGOptimizer {
   }
 
   loadSvgString(svg: string): void {
-    this.originalSvg = svg || "";
+    this.originalSvg = this.normalizeNamespaces(svg || "");
     if (this.editor) {
       this.options.isUpdatingFromTree = true;
       this.editor.setValue(this.originalSvg);
@@ -290,8 +298,8 @@ class SVGOptimizer {
   loadFile(file: File): void {
     const reader = new FileReader();
     reader.onload = (e) => {
-      this.originalSvg = String(
-        (e.target && (e.target as FileReader).result) ?? "",
+      this.originalSvg = this.normalizeNamespaces(
+        String((e.target && (e.target as FileReader).result) ?? ""),
       );
       if (this.editor) {
         try {
@@ -464,7 +472,12 @@ class SVGOptimizer {
     const root = doc.querySelector("svg");
     if (!root) return svg;
 
-    const hasXlinkHref = doc.querySelector("[xlink\\:href]");
+    const XLINK_NS = "http://www.w3.org/1999/xlink";
+    const hasXlinkHref = Array.from(doc.querySelectorAll("*")).some(
+      (el) =>
+        el.getAttributeNS(XLINK_NS, "href") !== null ||
+        el.hasAttribute("xlink:href"),
+    );
     const hasHref = doc.querySelector("[href]");
     if (!hasXlinkHref && hasHref) {
       root.removeAttribute("xmlns:xlink");
@@ -476,37 +489,62 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
+  convertXlinkHrefs(svg: string): string {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svg, "image/svg+xml");
+    const elements = Array.from(doc.querySelectorAll("*"));
+    const XLINK_NS = "http://www.w3.org/1999/xlink";
+    elements.forEach((el) => {
+      const xlinkHref =
+        el.getAttributeNS(XLINK_NS, "href") || el.getAttribute("xlink:href");
+      if (!xlinkHref) return;
+      if (!el.hasAttribute("href")) {
+        el.setAttribute("href", xlinkHref);
+      }
+    });
+    return new XMLSerializer().serializeToString(doc);
+  }
+
   removeDanglingNamespacedAttributes(svg: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, "image/svg+xml");
 
     const xmlnsUri = "http://www.w3.org/2000/xmlns/";
-    const xmlNsPrefix = "xmlns";
     const xmlPrefix = "xml";
-    const xlinkPrefix = "xlink";
 
-    const allElements = Array.from(doc.querySelectorAll("*"));
-    allElements.forEach((el) => {
-      const declaredPrefixes = new Set<string>([xmlNsPrefix, xmlPrefix]);
-
-      let current: Element | null = el;
+    const getDeclaredPrefixes = (start: Element): Set<string> => {
+      const declaredPrefixes = new Set<string>([xmlPrefix]);
+      let current: Element | null = start;
       while (current) {
         for (const attr of Array.from(current.attributes)) {
           if (attr.namespaceURI === xmlnsUri) {
-            declaredPrefixes.add(attr.localName || "");
-          } else if (attr.name === "xmlns") {
-            declaredPrefixes.add("");
+            if (attr.localName) {
+              declaredPrefixes.add(attr.localName);
+            }
           }
         }
         current = current.parentElement;
       }
+      return declaredPrefixes;
+    };
 
+    // Remove elements that still use a prefix with no in-scope declaration.
+    Array.from(doc.querySelectorAll("*")).forEach((el) => {
+      const prefix = el.prefix || "";
+      if (!prefix || prefix === xmlPrefix) return;
+      const declaredPrefixes = getDeclaredPrefixes(el);
+      if (!declaredPrefixes.has(prefix)) {
+        el.remove();
+      }
+    });
+
+    // Remove attributes that still use a prefix with no in-scope declaration.
+    Array.from(doc.querySelectorAll("*")).forEach((el) => {
+      const declaredPrefixes = getDeclaredPrefixes(el);
       Array.from(el.attributes).forEach((attr) => {
         if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) return;
         const prefix = attr.prefix || "";
-        if (!prefix) return;
-        if (prefix === xmlPrefix) return;
-        if (prefix === xlinkPrefix && declaredPrefixes.has(xlinkPrefix)) return;
+        if (!prefix || prefix === xmlPrefix) return;
         if (!declaredPrefixes.has(prefix)) {
           el.removeAttribute(attr.name);
         }
@@ -796,9 +834,117 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
+  stripUndeclaredNamespacedContent(svg: string): string {
+    const declaredPrefixes = new Set(["xml", "xlink"]);
+    const xmlnsRegex =
+      /\sxmlns:([A-Za-z_][\w.-]*)\s*=\s*(".*?"|'.*?'|[^\s>]+)/g;
+    let match: RegExpExecArray | null;
+    while ((match = xmlnsRegex.exec(svg)) !== null) {
+      declaredPrefixes.add(match[1]);
+    }
+
+    const usedPrefixes = new Set<string>();
+    const tagPrefixRegex = /<\s*([A-Za-z_][\w.-]*):[A-Za-z_][\w.-]*/g;
+    while ((match = tagPrefixRegex.exec(svg)) !== null) {
+      usedPrefixes.add(match[1]);
+    }
+    const attrPrefixRegex =
+      /(\s)([A-Za-z_][\w.-]*):([A-Za-z_][\w.-]*)\s*=\s*(".*?"|'.*?'|[^\s>]+)/g;
+    while ((match = attrPrefixRegex.exec(svg)) !== null) {
+      usedPrefixes.add(match[2]);
+    }
+
+    let output = svg.replace(attrPrefixRegex, (full, space, prefix) => {
+      if (prefix === "xmlns") return full;
+      if (!declaredPrefixes.has(prefix)) return space;
+      return full;
+    });
+
+    usedPrefixes.forEach((prefix) => {
+      if (prefix === "xml" || prefix === "xlink") return;
+      if (declaredPrefixes.has(prefix)) return;
+      const selfClosing = new RegExp(`<\\s*${prefix}:[^>]*?/>`, "g");
+      const paired = new RegExp(
+        `<\\s*${prefix}:[^>]*?>[\\s\\S]*?<\\s*/\\s*${prefix}:[^>]*?>`,
+        "g",
+      );
+      output = output.replace(paired, "");
+      output = output.replace(selfClosing, "");
+    });
+
+    return output;
+  }
+
+  stripXmlDeclarations(svg: string): string {
+    return svg
+      .replace(/^\uFEFF/, "")
+      .replace(/^\s*<\?xml[\s\S]*?\?>\s*/i, "")
+      .replace(/^\s*<!doctype[\s\S]*?>\s*/i, "");
+  }
+
+  normalizeXlinkHrefs(svg: string): string {
+    if (!svg.includes("xlink:href")) return svg;
+    let output = svg;
+    if (!/\sxmlns:xlink\s*=\s*(".*?"|'.*?')/.test(output)) {
+      output = output.replace(
+        /<svg\b([^>]*)>/i,
+        '<svg$1 xmlns:xlink="http://www.w3.org/1999/xlink">',
+      );
+    }
+    output = output.replace(
+      /<[^>]*\bxlink:href\s*=\s*(".*?"|'.*?')[^>]*>/g,
+      (tag) => {
+        if (/\shref\s*=\s*(".*?"|'.*?')/.test(tag)) return tag;
+        return tag.replace(
+          /\bxlink:href\s*=\s*(".*?"|'.*?')/,
+          (attr, val) => `xlink:href=${val} href=${val}`,
+        );
+      },
+    );
+    return output;
+  }
+
+  normalizeNamespaces(svg: string): string {
+    const cleaned = this.stripXmlDeclarations(svg);
+    const xlinkNormalized = this.normalizeXlinkHrefs(cleaned);
+    return this.stripUndeclaredNamespacedContent(xlinkNormalized);
+  }
+
   removeDefaultValues(svg: string): string {
     const parser = new DOMParser();
-    const doc = parser.parseFromString(svg, "image/svg+xml");
+    let doc = parser.parseFromString(svg, "image/svg+xml");
+    if (doc.getElementsByTagName("parsererror").length > 0) {
+      const cleaned = this.normalizeNamespaces(svg);
+      if (cleaned !== svg) {
+        const retry = parser.parseFromString(cleaned, "image/svg+xml");
+        if (retry.getElementsByTagName("parsererror").length === 0) {
+          svg = cleaned;
+          doc = retry;
+        } else {
+          return svg;
+        }
+      } else {
+        return svg;
+      }
+    }
+
+    const hasAncestorAttrOrStyle = (el: Element, attr: string): boolean => {
+      const attrLower = attr.toLowerCase();
+      let current = el.parentElement;
+      while (current) {
+        if (current.hasAttribute(attr)) return true;
+        const style = current.getAttribute("style");
+        if (style) {
+          const matches = style
+            .toLowerCase()
+            .split(";")
+            .some((entry) => entry.trim().startsWith(`${attrLower}:`));
+          if (matches) return true;
+        }
+        current = current.parentElement;
+      }
+      return false;
+    };
 
     const defaultValues = {
       "letter-spacing": ["0", "normal"],
@@ -806,6 +952,10 @@ class SVGOptimizer {
       "paint-order": ["normal", "fill stroke markers", "markers stroke fill"],
       "fill-opacity": ["1"],
       "stroke-opacity": ["1"],
+      "stroke-width": ["1"],
+      "stroke-dasharray": ["none"],
+      "stroke-dashoffset": ["0"],
+      overflow: ["visible"],
       opacity: ["1"],
       "clip-rule": ["nonzero"],
       "fill-rule": ["nonzero"],
@@ -815,12 +965,33 @@ class SVGOptimizer {
       "xml:space": ["preserve"],
       "font-weight": ["400"],
     };
+    const inheritedDefaults = new Set([
+      "stroke-width",
+      "stroke-dasharray",
+      "stroke-dashoffset",
+    ]);
+    const stripAttrNames = new Set(["enable-background"]);
+    const stripNamespacedAttrs = new Set(["viewOrigin", "rulerOrigin", "pageBounds"]);
 
     const allElements = doc.querySelectorAll("*");
     allElements.forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (stripAttrNames.has(attr.name)) {
+          el.removeAttribute(attr.name);
+          return;
+        }
+        const localName = attr.localName || attr.name;
+        if (stripNamespacedAttrs.has(localName)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+
       Object.keys(defaultValues).forEach((attr) => {
         const value = el.getAttribute(attr);
         if (value && defaultValues[attr].includes(value)) {
+          if (inheritedDefaults.has(attr) && hasAncestorAttrOrStyle(el, attr)) {
+            return;
+          }
           el.removeAttribute(attr);
         }
       });
@@ -833,6 +1004,53 @@ class SVGOptimizer {
           el.removeAttribute("opacity");
         }
       }
+    });
+
+    const usedPrefixes = new Set<string>();
+    allElements.forEach((el) => {
+      if (el.prefix) {
+        usedPrefixes.add(el.prefix);
+      }
+      Array.from(el.attributes).forEach((attr) => {
+        if (attr.prefix) {
+          usedPrefixes.add(attr.prefix);
+        }
+      });
+    });
+
+    allElements.forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (!attr.name.startsWith("xmlns:")) return;
+        const prefix = attr.name.slice("xmlns:".length);
+        if (prefix === "xml" || prefix === "xlink") return;
+        if (!usedPrefixes.has(prefix)) {
+          el.removeAttribute(attr.name);
+        }
+      });
+    });
+
+    const declaredPrefixes = new Set<string>(["xml", "xlink"]);
+    allElements.forEach((el) => {
+      Array.from(el.attributes).forEach((attr) => {
+        if (attr.name.startsWith("xmlns:")) {
+          declaredPrefixes.add(attr.name.slice("xmlns:".length));
+        }
+      });
+    });
+
+    allElements.forEach((el) => {
+      if (el.prefix && !declaredPrefixes.has(el.prefix)) {
+        el.remove();
+        return;
+      }
+      Array.from(el.attributes).forEach((attr) => {
+        const prefix = attr.prefix;
+        if (!prefix) return;
+        if (prefix === "xml" || prefix === "xlink") return;
+        if (!declaredPrefixes.has(prefix)) {
+          el.removeAttribute(attr.name);
+        }
+      });
     });
 
     return new XMLSerializer().serializeToString(doc);
@@ -1694,7 +1912,7 @@ class SVGOptimizer {
     }
     const parser = new DOMParser();
     // Tree view reflects the editable source SVG
-    const svgToParse = sourceSvg;
+    const svgToParse = this.normalizeNamespaces(sourceSvg);
     this.options.treeDoc = parser.parseFromString(svgToParse, "image/svg+xml");
   }
 
@@ -1706,12 +1924,12 @@ class SVGOptimizer {
     }
 
     if (!this.isOptimizationEnabled()) {
-      this.optimizedSvg = sourceSvg;
+      this.optimizedSvg = this.normalizeNamespaces(sourceSvg);
       return;
     }
 
     try {
-      let svg = sourceSvg;
+      let svg = this.normalizeNamespaces(sourceSvg);
       const preservedResult = this.injectPreserveMarkers(svg);
       svg = preservedResult.svg;
 
@@ -1764,6 +1982,9 @@ class SVGOptimizer {
       });
 
       svg = svgoResult.data;
+      svg = this.normalizeXlinkHrefs(svg);
+      svg = this.convertXlinkHrefs(svg);
+      svg = this.stripUndeclaredNamespacedContent(svg);
 
       // Apply custom optimizations
       if (this.options.precision >= 0) {

@@ -167,9 +167,41 @@ export function roundNumericList(value: string, precision: number) {
 }
 
 export function roundPathData(value: string, precision: number) {
-  return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
-    roundNumericValueFixed(match, precision)
-  );
+  const tokenRe = /([a-zA-Z])|([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/g;
+  const tokens: Array<{ type: 'cmd' | 'num'; value: string }> = [];
+  let match: RegExpExecArray | null;
+  while ((match = tokenRe.exec(value)) !== null) {
+    if (match[1]) {
+      tokens.push({ type: 'cmd', value: match[1] });
+    } else {
+      tokens.push({ type: 'num', value: match[2] });
+    }
+  }
+
+  if (tokens.length === 0) return value;
+
+  let out = '';
+  for (const token of tokens) {
+    if (token.type === 'cmd') {
+      out += token.value;
+      continue;
+    }
+
+    const rounded = roundNumericValueFixed(token.value, precision);
+    if (out.length === 0) {
+      out += rounded;
+      continue;
+    }
+
+    const prev = out[out.length - 1];
+    if (/[0-9.+-]|[eE]/.test(prev)) {
+      out += ' ' + rounded;
+    } else {
+      out += rounded;
+    }
+  }
+
+  return out;
 }
 
 export function applyTranslateToPoints(value: string, dx: number, dy: number) {
@@ -508,6 +540,86 @@ export function collapseTransforms(svg: string) {
   const svgEl = doc.querySelector('svg');
   if (!svgEl) return svg;
 
+  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+
+  const getHref = (el: Element): string | null => {
+    return (
+      el.getAttribute('href') ||
+      el.getAttribute('xlink:href') ||
+      el.getAttributeNS(XLINK_NS, 'href')
+    );
+  };
+
+  function getPaintRefId(value: string | null): string | null {
+    if (!value) return null;
+    const match = value.match(/url\(#([^)]+)\)/);
+    return match ? match[1] : null;
+  }
+
+  const paintUserSpace = new Map<string, boolean>();
+  const paintElements = Array.from(
+    doc.querySelectorAll('linearGradient, radialGradient, pattern')
+  );
+
+  const resolveUnits = (el: Element, trail: Set<Element>): string | null => {
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'lineargradient' || tag === 'radialgradient') {
+      const units = el.getAttribute('gradientUnits');
+      if (units) return units;
+    } else if (tag === 'pattern') {
+      const units = el.getAttribute('patternUnits');
+      if (units) return units;
+    }
+
+    const href = getHref(el);
+    if (!href || !href.startsWith('#')) return null;
+    const targetId = href.slice(1);
+    const target = doc.querySelector(`[id="${targetId}"]`);
+    if (!target || trail.has(target)) return null;
+    trail.add(target);
+    return resolveUnits(target, trail);
+  };
+
+  paintElements.forEach((el) => {
+    const id = el.getAttribute('id');
+    if (!id) return;
+    const units = resolveUnits(el, new Set([el]));
+    paintUserSpace.set(id, units === 'userSpaceOnUse');
+  });
+
+  function hasUserSpacePaint(el: Element): boolean {
+    const fillId = getPaintRefId(el.getAttribute('fill'));
+    const strokeId = getPaintRefId(el.getAttribute('stroke'));
+    const fillUserSpace = fillId ? paintUserSpace.get(fillId) : false;
+    const strokeUserSpace = strokeId ? paintUserSpace.get(strokeId) : false;
+    if (fillUserSpace || strokeUserSpace) {
+      return true;
+    }
+    const style = el.getAttribute('style');
+    if (style) {
+      const fillMatch = style.match(/fill\s*:\s*url\(#([^)]+)\)/i);
+      const strokeMatch = style.match(/stroke\s*:\s*url\(#([^)]+)\)/i);
+      const styleFillUserSpace = fillMatch
+        ? paintUserSpace.get(fillMatch[1])
+        : false;
+      const styleStrokeUserSpace = strokeMatch
+        ? paintUserSpace.get(strokeMatch[1])
+        : false;
+      if (styleFillUserSpace || styleStrokeUserSpace) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function subtreeUsesUserSpacePaint(el: Element): boolean {
+    if (hasUserSpacePaint(el)) return true;
+    for (const child of Array.from(el.children)) {
+      if (subtreeUsesUserSpacePaint(child)) return true;
+    }
+    return false;
+  }
+
   function canTranslate(el: Element) {
     const tag = el.tagName.toLowerCase();
     if (tag === 'g' || tag === 'svg') {
@@ -530,12 +642,15 @@ export function collapseTransforms(svg: string) {
 
     const tag = el.tagName.toLowerCase();
     if (tag === 'g' || tag === 'svg') {
+      if (subtreeUsesUserSpacePaint(el)) return false;
       if (!canTranslate(el)) return false;
       Array.from(el.children).forEach(child => {
         applyTranslate(child, dx, dy);
       });
       return true;
     }
+
+    if (hasUserSpacePaint(el)) return false;
 
     if (tag === 'path') {
       const d = el.getAttribute('d');

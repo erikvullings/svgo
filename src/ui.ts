@@ -152,10 +152,15 @@ export const App: m.Component = {
       const handleChange = () => {
         if (theme === "auto") applyTheme(theme);
       };
-      if ("addEventListener" in media) {
+      if (typeof media.addEventListener === "function") {
         media.addEventListener("change", handleChange);
-      } else if ("addListener" in media) {
-        media.addListener(handleChange);
+      } else {
+        const legacyMedia = media as MediaQueryList & {
+          addListener?: (listener: (this: MediaQueryList, ev: MediaQueryListEvent) => void) => void;
+        };
+        if (typeof legacyMedia.addListener === "function") {
+          legacyMedia.addListener(handleChange);
+        }
       }
     }
 

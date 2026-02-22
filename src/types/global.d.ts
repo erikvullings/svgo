@@ -21,6 +21,7 @@ interface MonacoApi {
     setLanguageConfiguration: (languageId: string, config: MonacoLanguageConfig) => void;
   };
   editor: {
+    setTheme: (theme: string) => void;
     create: (
       container: HTMLElement,
       options: {
