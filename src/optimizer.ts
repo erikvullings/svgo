@@ -227,7 +227,7 @@ class SVGOptimizer {
     if (PRESERVE_ATTR_PREFIXES.some((prefix) => lower.startsWith(prefix)))
       return true;
     if (PRESERVE_ATTR_NAMES.has(lower)) return true;
-    if (lower.includes(":")) return true;
+    if (lower.includes(":")) return false;
     return !KNOWN_SVG_ATTRS.has(lower);
   }
 
@@ -457,8 +457,11 @@ class SVGOptimizer {
     styles.forEach((style) => style.remove());
 
     // Remove style attributes
-    const allElements = doc.querySelectorAll("*");
-    allElements.forEach((el) => {
+    const elements: Element[] = [];
+    if (doc.documentElement) elements.push(doc.documentElement);
+    doc.querySelectorAll("*").forEach((el) => elements.push(el));
+
+    elements.forEach((el) => {
       el.removeAttribute("style");
       el.removeAttribute("class");
     });
@@ -973,26 +976,50 @@ class SVGOptimizer {
     const stripAttrNames = new Set(["enable-background"]);
     const stripNamespacedAttrs = new Set(["viewOrigin", "rulerOrigin", "pageBounds"]);
 
-    const allElements = doc.querySelectorAll("*");
-    allElements.forEach((el) => {
+    const elements: Element[] = [];
+    if (doc.documentElement) elements.push(doc.documentElement);
+    doc.querySelectorAll("*").forEach((el) => elements.push(el));
+
+    elements.forEach((el) => {
       Array.from(el.attributes).forEach((attr) => {
-        if (stripAttrNames.has(attr.name)) {
+        const localName = attr.localName || attr.name;
+        if (stripAttrNames.has(attr.name) || stripAttrNames.has(localName)) {
           el.removeAttribute(attr.name);
           return;
         }
-        const localName = attr.localName || attr.name;
         if (stripNamespacedAttrs.has(localName)) {
           el.removeAttribute(attr.name);
         }
       });
 
       Object.keys(defaultValues).forEach((attr) => {
-        const value = el.getAttribute(attr);
-        if (value && defaultValues[attr].includes(value)) {
+        let value = el.getAttribute(attr);
+        if (!value && attr === "xml:space") {
+          value = el.getAttributeNS(
+            "http://www.w3.org/XML/1998/namespace",
+            "space",
+          );
+        }
+        const normalized = value ? value.trim() : value;
+        const normalizedLower = normalized ? normalized.toLowerCase() : normalized;
+        const isDefault =
+          normalized &&
+          defaultValues[attr].some(
+            (v) => v === normalized || v.toLowerCase() === normalizedLower,
+          );
+        if (isDefault) {
           if (inheritedDefaults.has(attr) && hasAncestorAttrOrStyle(el, attr)) {
             return;
           }
-          el.removeAttribute(attr);
+          if (attr === "xml:space") {
+            el.removeAttribute("xml:space");
+            el.removeAttributeNS(
+              "http://www.w3.org/XML/1998/namespace",
+              "space",
+            );
+          } else {
+            el.removeAttribute(attr);
+          }
         }
       });
 
@@ -1007,7 +1034,7 @@ class SVGOptimizer {
     });
 
     const usedPrefixes = new Set<string>();
-    allElements.forEach((el) => {
+    elements.forEach((el) => {
       if (el.prefix) {
         usedPrefixes.add(el.prefix);
       }
@@ -1018,7 +1045,7 @@ class SVGOptimizer {
       });
     });
 
-    allElements.forEach((el) => {
+    elements.forEach((el) => {
       Array.from(el.attributes).forEach((attr) => {
         if (!attr.name.startsWith("xmlns:")) return;
         const prefix = attr.name.slice("xmlns:".length);
@@ -1030,7 +1057,7 @@ class SVGOptimizer {
     });
 
     const declaredPrefixes = new Set<string>(["xml", "xlink"]);
-    allElements.forEach((el) => {
+    elements.forEach((el) => {
       Array.from(el.attributes).forEach((attr) => {
         if (attr.name.startsWith("xmlns:")) {
           declaredPrefixes.add(attr.name.slice("xmlns:".length));
@@ -1038,7 +1065,7 @@ class SVGOptimizer {
       });
     });
 
-    allElements.forEach((el) => {
+    elements.forEach((el) => {
       if (el.prefix && !declaredPrefixes.has(el.prefix)) {
         el.remove();
         return;

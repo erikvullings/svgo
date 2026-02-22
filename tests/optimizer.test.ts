@@ -35,3 +35,68 @@ describe("xlink href handling", () => {
     expect(normalized).toContain("xlink:href");
   });
 });
+
+describe("removeDefaultValues", () => {
+  it("removes overflow, enable-background, and xml:space defaults", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 192" overflow="visible" enable-background="new 0 0 300 192" xml:space="preserve">' +
+      '<path d="M0 0h10v10z"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.removeDefaultValues(input);
+    expect(output).not.toContain('overflow="visible"');
+    expect(output).not.toContain("enable-background");
+    expect(output).not.toContain('xml:space="preserve"');
+  });
+
+  it("removes namespaced Illustrator metadata attrs and unused xmlns", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns2="http://ns.adobe.com/AdobeIllustrator/10.0/" ns2:viewOrigin="0 0" ns2:rulerOrigin="0 0" ns2:pageBounds="0 360 360 0">' +
+      '<path d="M0 0h10v10z"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.removeDefaultValues(input);
+    expect(output).not.toContain("ns2:viewOrigin");
+    expect(output).not.toContain("ns2:rulerOrigin");
+    expect(output).not.toContain("ns2:pageBounds");
+    expect(output).not.toContain("xmlns:ns2");
+  });
+});
+
+describe("optimizeSvg", () => {
+  it("removes ns2 namespace after optimization", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns2="http://ns.adobe.com/AdobeIllustrator/10.0/" ns2:viewOrigin="0 0" ns2:rulerOrigin="0 0" ns2:pageBounds="0 360 360 0">' +
+      '<path d="M0 0h10v10z"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.removeDefaultValues = true;
+    await optimizer.optimizeSvg();
+    const output = optimizer.optimizedSvg;
+    expect(output).not.toContain("xmlns:ns2");
+    expect(output).not.toContain("ns2:viewOrigin");
+    expect(output).not.toContain("ns2:rulerOrigin");
+    expect(output).not.toContain("ns2:pageBounds");
+    expect(output).not.toContain("parsererror");
+    expect(output).toContain('<path d="M0 0h10v10z"/>');
+  });
+  it("removes ns2 namespace without namespace declaration after optimization", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" ns2:viewOrigin="0 0" ns2:rulerOrigin="0 0" ns2:pageBounds="0 360 360 0">' +
+      '<path d="M0 0h10v10z"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.removeDefaultValues = true;
+    await optimizer.optimizeSvg();
+    const output = optimizer.optimizedSvg;
+    expect(output).not.toContain("xmlns:ns2");
+    expect(output).not.toContain("ns2");
+    expect(output).not.toContain("ns2:viewOrigin");
+    expect(output).not.toContain("ns2:rulerOrigin");
+    expect(output).not.toContain("ns2:pageBounds");
+    expect(output).not.toContain("parsererror");
+    expect(output).toContain('<path d="M0 0h10v10z"/>');
+  });
+});
