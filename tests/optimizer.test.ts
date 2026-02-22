@@ -99,4 +99,19 @@ describe("optimizeSvg", () => {
     expect(output).not.toContain("parsererror");
     expect(output).toContain('<path d="M0 0h10v10z"/>');
   });
+
+  it("removes overflow and enable-background after optimization", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120.7 120.7" overflow="visible" enable-background="new 0 0 300 192">' +
+      '<path d="M0 0h10v10z"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.removeDefaultValues = true;
+    await optimizer.optimizeSvg();
+    const output = optimizer.optimizedSvg;
+    expect(output).not.toContain('overflow="visible"');
+    expect(output).not.toContain("enable-background");
+    expect(output).not.toContain("parsererror");
+  });
 });
