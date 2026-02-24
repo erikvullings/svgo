@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
 import { SVGOptimizer } from "../src/optimizer";
 
 describe("xlink href handling", () => {
@@ -112,6 +113,27 @@ describe("optimizeSvg", () => {
     const output = optimizer.optimizedSvg;
     expect(output).not.toContain('overflow="visible"');
     expect(output).not.toContain("enable-background");
+    expect(output).not.toContain("parsererror");
+  });
+
+  it("preserves marker arrowheads for arrows example", async () => {
+    const input = readFileSync("tests/examples/arrows.svg", "utf8");
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    await optimizer.optimizeSvg();
+    const output = optimizer.optimizedSvg;
+
+    expect(output).toContain("<marker");
+    expect(output).toContain('overflow="visible"');
+    expect(output).toContain('marker-end="url(#');
+    expect(output).not.toContain('marker-end="url(#i)"');
+    const markerIds = Array.from(output.matchAll(/<marker\b[^>]*\bid="([^"]+)"/g))
+      .map((match) => match[1]);
+    const markerIdSet = new Set(markerIds);
+    const markerRefs = Array.from(output.matchAll(/marker-end="url\(#([^"]+)\)"/g))
+      .map((match) => match[1]);
+    expect(markerRefs.length).toBeGreaterThan(0);
+    expect(markerRefs.every((id) => markerIdSet.has(id))).toBe(true);
     expect(output).not.toContain("parsererror");
   });
 });

@@ -993,6 +993,12 @@ class SVGOptimizer {
       });
 
       Object.keys(defaultValues).forEach((attr) => {
+        if (
+          attr === "overflow" &&
+          (el.localName || el.tagName).toLowerCase() === "marker"
+        ) {
+          return;
+        }
         let value = el.getAttribute(attr);
         if (!value && attr === "xml:space") {
           value = el.getAttributeNS(

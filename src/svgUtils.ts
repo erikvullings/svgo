@@ -39,6 +39,7 @@ export const KNOWN_SVG_ATTRS = new Set([
   'offset', 'stop-color', 'stop-opacity',
   'gradientunits', 'gradienttransform', 'fx', 'fy',
   'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'markerunits',
+  'marker-start', 'marker-mid', 'marker-end',
   'patternunits', 'patterncontentunits', 'patterntransform',
   'maskunits', 'maskcontentunits', 'clippathunits',
   'version', 'baseprofile',
