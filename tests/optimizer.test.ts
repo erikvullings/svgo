@@ -116,6 +116,26 @@ describe("optimizeSvg", () => {
     expect(output).not.toContain("parsererror");
   });
 
+  it("preserves non-zero opacity and stroke-width at 0 precision", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<circle cx="10.4" cy="20.5" r="5.2" stroke="red" opacity="0.3" stroke-width="0.4" stop-opacity="0.25"/>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.precision = 0;
+    optimizer.options.pathPrecision = 0;
+    await optimizer.optimizeSvg();
+    const output = optimizer.optimizedSvg;
+    
+    expect(output).toContain('cx="10"');
+    expect(output).toContain('cy="21"');
+    expect(output).toContain('opacity=".3"');
+    expect(output).toContain('stroke-width=".4"');
+    expect(output).toContain('stop-opacity=".3"');
+    expect(output).toContain('r="5"');
+  });
+
   it("preserves marker arrowheads for arrows example", async () => {
     const input = readFileSync("tests/examples/arrows.svg", "utf8");
     const optimizer = new SVGOptimizer();

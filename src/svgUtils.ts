@@ -1,19 +1,23 @@
 export const ROUNDABLE_ATTRS = new Set([
   'x', 'y', 'cx', 'cy',
   'width', 'height',
-  'r', 'rx', 'ry'
+  'r', 'rx', 'ry',
+  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
+  'stroke-width', 'font-size'
 ]);
 
 export const ZERO_SENSITIVE_ATTRS = new Set([
   'width', 'height',
-  'r', 'rx', 'ry'
+  'r', 'rx', 'ry',
+  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
+  'stroke-width', 'font-size'
 ]);
 
 export const NUMERIC_ATTRS = new Set([
   'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy',
   'r', 'rx', 'ry', 'width', 'height',
   'dx', 'dy', 'font-size', 'stroke-width',
-  'opacity', 'fill-opacity', 'stroke-opacity',
+  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
   'stroke-dashoffset', 'stroke-miterlimit',
   'letter-spacing', 'word-spacing',
   'pathlength'
@@ -104,13 +108,7 @@ export function roundAttrsRecursive(node: Element) {
       num += dy;
     }
 
-    const rounded = Math.round(num);
-
-    const newValue =
-      ZERO_SENSITIVE_ATTRS.has(attr.name) && rounded === 0
-        ? num.toFixed(1)
-        : rounded.toFixed(0);
-
+    const newValue = roundNumericValueFixed(String(num), 0, attr.name);
     node.setAttribute(attr.name, newValue);
   }
 
@@ -142,9 +140,23 @@ export function roundNumericValue(value: string, precision: number) {
   return formatNumberCompact(rounded);
 }
 
-export function roundNumericValueFixed(value: string, precision: number) {
+export function roundNumericValueFixed(value: string, precision: number, attrName?: string) {
   const num = parseFloat(value);
   if (!Number.isFinite(num)) return value;
+
+  if (num !== 0 && attrName && ZERO_SENSITIVE_ATTRS.has(attrName.toLowerCase())) {
+    let p = precision;
+    let rounded = parseFloat(num.toFixed(p));
+    while (rounded === 0 && p < 4) {
+      p++;
+      rounded = parseFloat(num.toFixed(p));
+    }
+    if (rounded === 0) {
+      return formatNumberCompact(parseFloat(num.toFixed(4)));
+    }
+    return formatNumberCompact(rounded);
+  }
+
   if (precision === 0) return formatNumberCompact(Math.round(num));
   const rounded = parseFloat(num.toFixed(precision));
   return formatNumberCompact(rounded);
@@ -162,9 +174,9 @@ export function formatNumberCompact(num: number) {
   return result;
 }
 
-export function roundNumericList(value: string, precision: number) {
+export function roundNumericList(value: string, precision: number, attrName?: string) {
   return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
-    roundNumericValueFixed(match, precision)
+    roundNumericValueFixed(match, precision, attrName)
   );
 }
 

@@ -416,11 +416,11 @@ class SVGOptimizer {
           return;
         }
         if (NUMERIC_ATTRS.has(name)) {
-          attr.value = roundNumericValueFixed(attr.value, attrPrecision);
+          attr.value = roundNumericValueFixed(attr.value, attrPrecision, name);
           return;
         }
         if (NUMERIC_LIST_ATTRS.has(name)) {
-          attr.value = roundNumericList(attr.value, attrPrecision);
+          attr.value = roundNumericList(attr.value, attrPrecision, name);
         }
       });
     });
