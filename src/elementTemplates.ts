@@ -47,11 +47,28 @@ export const ELEMENT_TEMPLATES: Record<string, SvgElementTemplate> = {
   },
 };
 
+const CHILD_ELEMENT_CONTAINER_TAGS = new Set([
+  "a",
+  "clippath",
+  "defs",
+  "g",
+  "marker",
+  "mask",
+  "pattern",
+  "svg",
+  "switch",
+  "symbol",
+]);
+
 export function getSvgElementTemplate(
   tagName: string,
 ): SvgElementTemplate | null {
   const key = tagName.toLowerCase();
   return ELEMENT_TEMPLATES[key] ?? null;
+}
+
+export function canContainSvgElements(element: Element): boolean {
+  return CHILD_ELEMENT_CONTAINER_TAGS.has(element.tagName.toLowerCase());
 }
 
 export function createSvgElementFromTemplate(
@@ -89,6 +106,7 @@ export function insertSvgElementFromTemplate(
   if (!element) return null;
 
   if (placement === "child") {
+    if (!canContainSvgElements(target)) return null;
     target.appendChild(element);
     return element;
   }

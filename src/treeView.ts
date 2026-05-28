@@ -2,6 +2,7 @@ import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import { optimizer } from "./optimizer";
 import {
+  canContainSvgElements,
   ELEMENT_TEMPLATES,
   type ElementPlacement,
   insertSvgElementFromTemplate,
@@ -574,14 +575,14 @@ function applyEditingValueLive(saveHistory = true): void {
   }
 }
 
-function getPrecisionStep(): number {
+export function getPrecisionStep(): number {
   const precision = optimizer.options.precision;
-  return precision === 0 ? 0.1 : Math.pow(10, -precision);
+  return precision === 0 ? 1 : Math.pow(10, -precision);
 }
 
 function formatIncrementedNumber(value: number): string {
   const precision = optimizer.options.precision;
-  const decimals = precision === 0 ? 1 : Math.max(0, precision);
+  const decimals = Math.max(0, precision);
   return value
     .toFixed(decimals)
     .replace(/\.0+$/, "")
@@ -813,6 +814,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
     if (!node || node.nodeType !== 1) return null;
 
     const isSelected = optimizer.options.selectedElementPath === path;
+    const canInsertChild = canContainSvgElements(node);
 
     // For text and tspan elements, we want to include both children and text content
     let children: Array<Element | Text> = [];
@@ -943,14 +945,15 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             ],
           ),
           m(".node-controls", [
-            m(
-              "button.control-btn",
-              {
-                title: "Insert child element",
-                onclick: (e: MouseEvent) => openElementMenu(path, "child", e),
-              },
-              "+ child",
-            ),
+            canInsertChild &&
+              m(
+                "button.control-btn",
+                {
+                  title: "Insert child element",
+                  onclick: (e: MouseEvent) => openElementMenu(path, "child", e),
+                },
+                "+ child",
+              ),
 
             !isRoot &&
               m(
@@ -964,18 +967,6 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               ),
 
             renderAddElementMenu(path),
-
-            m(
-              "button.control-btn",
-              {
-                title: "Add attribute",
-                onclick: (e) => {
-                  e.stopPropagation();
-                  startAttributeEditing(path, node, null, "name");
-                },
-              },
-              "+ attr",
-            ),
 
             // ⭕ round-to-zero button (only if useful)
             isSelected &&
@@ -1158,7 +1149,8 @@ function renderPropertiesInspector(
   const path = selectedElement ? (optimizer.options.selectedElementPath ?? "0") : "0";
   const visibility = element.getAttribute("display") !== "none";
   const opacity = element.getAttribute("opacity") ?? "1";
-  const placement = elementMenuState.placement;
+  const canInsertChild = canContainSvgElements(element);
+  const placement = canInsertChild ? elementMenuState.placement : "sibling";
 
   return m(".properties-inspector", [
     m(".inspector-header", [
@@ -1168,17 +1160,18 @@ function renderPropertiesInspector(
     m(".inspector-section", [
       m(".inspector-label", "Insert"),
       m(".segmented", [
-        m(
-          "button",
-          {
-            class: placement === "child" ? "active" : "",
-            type: "button",
-            onclick: () => {
-              elementMenuState.placement = "child";
+        canInsertChild &&
+          m(
+            "button",
+            {
+              class: placement === "child" ? "active" : "",
+              type: "button",
+              onclick: () => {
+                elementMenuState.placement = "child";
+              },
             },
-          },
-          "Child",
-        ),
+            "Child",
+          ),
         path !== "0" &&
           m(
             "button",
@@ -1203,7 +1196,7 @@ function renderPropertiesInspector(
                 insertElementAtPath(
                   path,
                   tagName,
-                  path === "0" ? "child" : elementMenuState.placement,
+                  path === "0" ? "child" : placement,
                 ),
             },
             tagName,

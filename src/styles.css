@@ -390,6 +390,7 @@
 
     .main-content {
       display: flex;
+      flex-direction: column;
       flex: 1;
       min-height: 0;
     }
@@ -594,17 +595,27 @@
 
     .main-content {
       display: flex;
+      flex-direction: column;
       flex: 1;
       min-height: 0;
     }
 
     .dragbar {
       z-index: 10;
-      width: 6px;
-      cursor: col-resize;
+      width: 100%;
+      height: 6px;
+      cursor: row-resize;
       background: var(--border);
       flex: 0 0 6px;
       align-self: stretch;
+    }
+
+    #left-panel {
+      flex: 0 0 50%;
+    }
+
+    #right-panel {
+      flex: 1 1 0;
     }
 
     #left-panel,

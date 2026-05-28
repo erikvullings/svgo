@@ -225,15 +225,8 @@ export const App: m.Component = {
                 const container = splitter.parentElement as HTMLElement | null;
                 document.onmousemove = function (event) {
                   const bounds = container?.getBoundingClientRect();
-                  const isPortrait =
-                    (bounds?.height ?? window.innerHeight) >
-                    (bounds?.width ?? window.innerWidth);
-                  const total = isPortrait
-                    ? bounds?.height ?? window.innerHeight
-                    : bounds?.width ?? window.innerWidth;
-                  const offset = isPortrait
-                    ? event.clientY - (bounds?.top ?? 0)
-                    : event.clientX - (bounds?.left ?? 0);
+                  const total = bounds?.height ?? window.innerHeight;
+                  const offset = event.clientY - (bounds?.top ?? 0);
                   let percent = (offset / total) * 100;
                   let percentSplitter = (6 / total) * 100;
                   percent = Math.max(10, Math.min(90, percent));

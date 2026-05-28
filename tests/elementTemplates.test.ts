@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
 import {
+  canContainSvgElements,
   createSvgElementFromTemplate,
   insertSvgElementFromTemplate,
 } from "../src/elementTemplates";
+import { optimizer } from "../src/optimizer";
+import { getPrecisionStep } from "../src/treeView";
 
 function parseSvg(input: string): Document {
   return new DOMParser().parseFromString(input, "image/svg+xml");
@@ -33,6 +36,18 @@ describe("SVG element templates", () => {
     expect(inserted?.tagName).toBe("rect");
     expect(target?.children.length).toBe(1);
     expect(target?.firstElementChild).toBe(inserted);
+  });
+
+  it("does not insert child elements into leaf elements", () => {
+    const doc = parseSvg(
+      '<svg xmlns="http://www.w3.org/2000/svg"><path id="target" d="M0 0"/></svg>',
+    );
+    const target = doc.querySelector("#target");
+    const inserted = insertSvgElementFromTemplate(doc, target, "rect", "child");
+
+    expect(canContainSvgElements(target as Element)).toBe(false);
+    expect(inserted).toBeNull();
+    expect(target?.children.length).toBe(0);
   });
 
   it("inserts a template as the next sibling of the target element", () => {
@@ -70,5 +85,15 @@ describe("SVG element templates", () => {
 
     expect(inserted).toBeNull();
     expect(target?.children.length).toBe(0);
+  });
+
+  it("uses whole-number inspector steps at 0 precision", () => {
+    const previousPrecision = optimizer.options.precision;
+    try {
+      optimizer.options.precision = 0;
+      expect(getPrecisionStep()).toBe(1);
+    } finally {
+      optimizer.options.precision = previousPrecision;
+    }
   });
 });
