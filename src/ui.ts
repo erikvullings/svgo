@@ -3,7 +3,6 @@ import { optimizer, vscodeApi } from "./optimizer";
 import { Header } from "./components/header";
 import { EditorPanel } from "./components/editorPanel";
 import { PreviewPanel } from "./components/previewPanel";
-import { renderAttributeDialog } from "./treeView";
 import { Sidebar } from "./components/sidebar";
 
 let svgScale = 1;
@@ -262,11 +261,6 @@ export const App: m.Component = {
         ]),
       ]),
     ];
-
-    const dialog = renderAttributeDialog();
-    if (dialog) {
-      body.push(dialog);
-    }
 
     return m("div", body);
   },

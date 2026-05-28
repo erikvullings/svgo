@@ -1,6 +1,11 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import { optimizer } from "./optimizer";
+import {
+  ELEMENT_TEMPLATES,
+  type ElementPlacement,
+  insertSvgElementFromTemplate,
+} from "./elementTemplates";
 import { hasRoundableAttrs, roundAttrsRecursive } from "./svgUtils";
 import { getElementByPath, getElementInSvgByPath } from "./treeUtils";
 
@@ -23,6 +28,8 @@ type TreeNodeAttrs = {
   isLast?: boolean;
 };
 
+type EditingField = "name" | "value";
+
 export const TreeView: m.Component = {
   view() {
     if (!optimizer.getSourceSvg()) return m(".tree-view", "No SVG loaded");
@@ -32,16 +39,25 @@ export const TreeView: m.Component = {
     const svg = optimizer.options.treeDoc.querySelector("svg");
 
     if (!svg) return m(".tree-view", "Invalid SVG");
+    const selectedElement = optimizer.options.selectedElementPath
+      ? getElementByPath(
+          optimizer.options.treeDoc,
+          optimizer.options.selectedElementPath,
+        )
+      : svg;
 
     return m(".tree-view", [
-      m(".tree-content", [
-        m(TreeNode, {
-          node: svg,
-          path: "0",
-          isRoot: true,
-          prefix: "",
-          isLast: true,
-        }),
+      m(".tree-layout", [
+        m(".tree-content", [
+          m(TreeNode, {
+            node: svg,
+            path: "0",
+            isRoot: true,
+            prefix: "",
+            isLast: true,
+          }),
+        ]),
+        renderPropertiesInspector(selectedElement, svg),
       ]),
     ]);
   },
@@ -160,22 +176,36 @@ const ATTRIBUTE_SUGGESTIONS_BY_TAG = {
   symbol: ["viewBox", "preserveAspectRatio"],
 };
 
-const attributeDialogState: {
+const elementMenuState: {
   isOpen: boolean;
   path: string | null;
-  tagName: string;
-  name: string;
-  value: string;
+  placement: ElementPlacement;
+} = {
+  isOpen: false,
+  path: null,
+  placement: "child",
+};
+
+const editingState: {
+  path: string | null;
+  originalAttrName: string | null;
+  field: EditingField;
+  isNew: boolean;
+  nameInput: string;
+  valueInput: string;
+  originalValue: string;
   suggestions: string[];
   filteredSuggestions: string[];
   selectedSuggestionIndex: number;
   showSuggestionList: boolean;
 } = {
-  isOpen: false,
   path: null,
-  tagName: "",
-  name: "",
-  value: "",
+  originalAttrName: null,
+  field: "name",
+  isNew: false,
+  nameInput: "",
+  valueInput: "",
+  originalValue: "",
   suggestions: [],
   filteredSuggestions: [],
   selectedSuggestionIndex: 0,
@@ -190,36 +220,141 @@ function getAttributeSuggestionsForElement(element: Element) {
   return Array.from(new Set(merged));
 }
 
-function openAttributeDialog(path: string) {
-  const doc = optimizer.options.treeDoc;
-  const element = getElementByPath(doc, path);
-  if (!element) return;
-
-  attributeDialogState.isOpen = true;
-  attributeDialogState.path = path;
-  attributeDialogState.tagName = element.tagName.toLowerCase();
-  attributeDialogState.name = "";
-  attributeDialogState.value = "";
-  attributeDialogState.suggestions = getAttributeSuggestionsForElement(element);
-  attributeDialogState.filteredSuggestions = getRankedAttributeSuggestions(
-    "",
-    attributeDialogState.suggestions,
-  );
-  attributeDialogState.selectedSuggestionIndex = 0;
-  attributeDialogState.showSuggestionList = false;
+function openElementMenu(
+  path: string,
+  placement: ElementPlacement,
+  event: MouseEvent,
+) {
+  event.stopPropagation();
+  elementMenuState.isOpen =
+    elementMenuState.path !== path ||
+    elementMenuState.placement !== placement ||
+    !elementMenuState.isOpen;
+  elementMenuState.path = path;
+  elementMenuState.placement = placement;
   m.redraw();
 }
 
-function closeAttributeDialog() {
-  attributeDialogState.isOpen = false;
-  attributeDialogState.path = null;
-  attributeDialogState.tagName = "";
-  attributeDialogState.name = "";
-  attributeDialogState.value = "";
-  attributeDialogState.suggestions = [];
-  attributeDialogState.filteredSuggestions = [];
-  attributeDialogState.selectedSuggestionIndex = 0;
-  attributeDialogState.showSuggestionList = false;
+function closeElementMenu() {
+  elementMenuState.isOpen = false;
+  elementMenuState.path = null;
+}
+
+function getChildPath(parentPath: string, parent: Element, child: Element) {
+  return `${parentPath}.${Array.from(parent.children).indexOf(child)}`;
+}
+
+function getSiblingPath(targetPath: string, child: Element) {
+  const parent = child.parentElement;
+  if (!parent) return targetPath;
+  const parts = targetPath.split(".");
+  parts[parts.length - 1] = String(Array.from(parent.children).indexOf(child));
+  return parts.join(".");
+}
+
+function insertElementAtPath(
+  path: string,
+  tagName: string,
+  placement: ElementPlacement,
+) {
+  const doc = optimizer.options.treeDoc;
+  const target = getElementByPath(doc, path);
+  const inserted = insertSvgElementFromTemplate(doc, target, tagName, placement);
+  if (!target || !inserted) {
+    closeElementMenu();
+    m.redraw();
+    return;
+  }
+
+  const insertedPath =
+    placement === "child"
+      ? getChildPath(path, target, inserted)
+      : getSiblingPath(path, inserted);
+  optimizer.options.selectedElementPath = insertedPath;
+  updateFromTree(doc);
+  closeElementMenu();
+  setTimeout(() => highlightElement(insertedPath), 0);
+}
+
+function renderAddElementMenu(path: string): m.Children {
+  if (!elementMenuState.isOpen || elementMenuState.path !== path) return null;
+
+  return m(
+    ".element-menu",
+    {
+      onclick: (e: MouseEvent) => e.stopPropagation(),
+    },
+    Object.keys(ELEMENT_TEMPLATES).map((tagName) =>
+      m(
+        "button.element-menu-item",
+        {
+          type: "button",
+          onclick: () =>
+            insertElementAtPath(path, tagName, elementMenuState.placement),
+        },
+        [
+          m("span", tagName),
+          m(
+            "small",
+            elementMenuState.placement === "child" ? "append child" : "after",
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+function resetEditingState() {
+  editingState.path = null;
+  editingState.originalAttrName = null;
+  editingState.field = "name";
+  editingState.isNew = false;
+  editingState.nameInput = "";
+  editingState.valueInput = "";
+  editingState.originalValue = "";
+  editingState.suggestions = [];
+  editingState.filteredSuggestions = [];
+  editingState.selectedSuggestionIndex = 0;
+  editingState.showSuggestionList = false;
+}
+
+function inputId(path: string, attrName: string | null, field: EditingField) {
+  const safe = `${path}-${attrName ?? "new"}-${field}`.replace(
+    /[^a-z0-9_-]/gi,
+    "-",
+  );
+  return `attr-edit-${safe}`;
+}
+
+function focusEditingInput(field: EditingField) {
+  const path = editingState.path;
+  if (!path) return;
+  const id = inputId(path, editingState.originalAttrName, field);
+  setTimeout(() => {
+    const input = document.getElementById(id) as HTMLInputElement | null;
+    input?.focus();
+    input?.select();
+  }, 0);
+}
+
+function startAttributeEditing(
+  path: string,
+  element: Element,
+  attrName: string | null,
+  field: EditingField,
+) {
+  editingState.path = path;
+  editingState.originalAttrName = attrName;
+  editingState.field = field;
+  editingState.isNew = attrName === null;
+  editingState.nameInput = attrName ?? "";
+  editingState.valueInput = attrName ? (element.getAttribute(attrName) ?? "") : "";
+  editingState.originalValue = editingState.valueInput;
+  editingState.suggestions = getAttributeSuggestionsForElement(element);
+  updateInlineSuggestionState();
+  editingState.showSuggestionList = attrName === null;
+  optimizer.options.selectedElementPath = path;
+  focusEditingInput(field);
   m.redraw();
 }
 
@@ -295,49 +430,46 @@ function getRankedAttributeSuggestions(
   return ranked;
 }
 
-function updateAttributeSuggestionState(preferredSuggestion?: string): void {
+function updateInlineSuggestionState(preferredSuggestion?: string): void {
   const ranked = getRankedAttributeSuggestions(
-    attributeDialogState.name,
-    attributeDialogState.suggestions,
+    editingState.nameInput,
+    editingState.suggestions,
   );
-  attributeDialogState.filteredSuggestions = ranked;
+  editingState.filteredSuggestions = ranked;
 
   if (ranked.length === 0) {
-    attributeDialogState.selectedSuggestionIndex = -1;
+    editingState.selectedSuggestionIndex = -1;
     return;
   }
 
   if (preferredSuggestion) {
     const preferredIndex = ranked.indexOf(preferredSuggestion);
     if (preferredIndex >= 0) {
-      attributeDialogState.selectedSuggestionIndex = preferredIndex;
+      editingState.selectedSuggestionIndex = preferredIndex;
       return;
     }
   }
 
   const current = Math.max(
     0,
-    Math.min(attributeDialogState.selectedSuggestionIndex, ranked.length - 1),
+    Math.min(editingState.selectedSuggestionIndex, ranked.length - 1),
   );
-  attributeDialogState.selectedSuggestionIndex = current;
+  editingState.selectedSuggestionIndex = current;
 }
 
-function syncDialogValueFromExistingAttribute(): void {
+function syncInlineValueFromExistingAttribute(): void {
   const doc = optimizer.options.treeDoc;
-  const element = getElementByPath(
-    doc as Document,
-    attributeDialogState.path as string,
-  );
+  const element = getElementByPath(doc as Document, editingState.path as string);
   if (!element) return;
 
-  const existingValue = element.getAttribute(attributeDialogState.name.trim());
-  if (existingValue !== null && attributeDialogState.value === "") {
-    attributeDialogState.value = existingValue;
+  const existingValue = element.getAttribute(editingState.nameInput.trim());
+  if (existingValue !== null && editingState.valueInput === "") {
+    editingState.valueInput = existingValue;
   }
 }
 
-function acceptSelectedAttributeSuggestion(): boolean {
-  const { filteredSuggestions, selectedSuggestionIndex } = attributeDialogState;
+function acceptSelectedInlineSuggestion(): boolean {
+  const { filteredSuggestions, selectedSuggestionIndex } = editingState;
   if (
     filteredSuggestions.length === 0 ||
     selectedSuggestionIndex < 0 ||
@@ -347,192 +479,273 @@ function acceptSelectedAttributeSuggestion(): boolean {
   }
 
   const selected = filteredSuggestions[selectedSuggestionIndex];
-  if (!selected || selected === attributeDialogState.name) {
+  if (!selected || selected === editingState.nameInput) {
     return false;
   }
 
-  attributeDialogState.name = selected;
-  updateAttributeSuggestionState(selected);
-  syncDialogValueFromExistingAttribute();
-  attributeDialogState.showSuggestionList = false;
+  editingState.nameInput = selected;
+  updateInlineSuggestionState(selected);
+  syncInlineValueFromExistingAttribute();
+  editingState.showSuggestionList = false;
   return true;
 }
 
-function applyAttributeDialog() {
-  const name = attributeDialogState.name.trim();
-  if (!name) return;
-
-  const doc = optimizer.options.treeDoc;
-  const element = getElementByPath(doc, attributeDialogState.path);
-  if (!element) {
-    closeAttributeDialog();
+function saveEditingAttribute(): void {
+  const name = editingState.nameInput.trim();
+  if (!name || !editingState.path) {
+    resetEditingState();
+    m.redraw();
     return;
   }
 
-  element.setAttribute(name, attributeDialogState.value);
-  updateFromTree(doc);
-  closeAttributeDialog();
+  const doc = optimizer.options.treeDoc;
+  const element = getElementByPath(doc, editingState.path);
+  if (!element) {
+    resetEditingState();
+    m.redraw();
+    return;
+  }
+
+  try {
+    if (
+      editingState.originalAttrName &&
+      editingState.originalAttrName !== name
+    ) {
+      element.removeAttribute(editingState.originalAttrName);
+    }
+    element.setAttribute(name, editingState.valueInput);
+    editingState.originalAttrName = name;
+    editingState.isNew = false;
+    updateFromTree(doc);
+    resetEditingState();
+  } catch {
+    editingState.showSuggestionList = false;
+    m.redraw();
+  }
 }
 
-export function renderAttributeDialog(): m.Children {
-  if (!attributeDialogState.isOpen) return null;
+function cancelEditingAttribute(): void {
+  const { path, originalAttrName, originalValue, isNew, nameInput } =
+    editingState;
+  const doc = optimizer.options.treeDoc;
+  const element = path ? getElementByPath(doc, path) : null;
+
+  if (element) {
+    const currentName = nameInput.trim();
+    if (isNew) {
+      if (currentName) element.removeAttribute(currentName);
+    } else if (originalAttrName) {
+      if (currentName && currentName !== originalAttrName) {
+        element.removeAttribute(currentName);
+      }
+      element.setAttribute(originalAttrName, originalValue);
+    }
+    updateFromTree(doc);
+  } else {
+    m.redraw();
+  }
+
+  resetEditingState();
+}
+
+function applyEditingValueLive(saveHistory = true): void {
+  const name = editingState.nameInput.trim();
+  if (!name || !editingState.path) return;
+
+  const doc = optimizer.options.treeDoc;
+  const element = getElementByPath(doc, editingState.path);
+  if (!element) return;
+
+  try {
+    if (
+      editingState.originalAttrName &&
+      editingState.originalAttrName !== name
+    ) {
+      element.removeAttribute(editingState.originalAttrName);
+    }
+    element.setAttribute(name, editingState.valueInput);
+    editingState.originalAttrName = name;
+    editingState.isNew = false;
+    if (saveHistory) {
+      updateFromTree(doc);
+    }
+  } catch {
+    // Invalid attribute names are ignored until the user commits a valid one.
+  }
+}
+
+function getPrecisionStep(): number {
+  const precision = optimizer.options.precision;
+  return precision === 0 ? 0.1 : Math.pow(10, -precision);
+}
+
+function formatIncrementedNumber(value: number): string {
+  const precision = optimizer.options.precision;
+  const decimals = precision === 0 ? 1 : Math.max(0, precision);
+  return value
+    .toFixed(decimals)
+    .replace(/\.0+$/, "")
+    .replace(/(\.\d*?)0+$/, "$1");
+}
+
+function incrementEditingValue(direction: 1 | -1): boolean {
+  const match = editingState.valueInput.trim().match(/^(-?(?:\d+\.?\d*|\.\d+))(.*)$/);
+  if (!match) return false;
+
+  const nextValue = Number.parseFloat(match[1]) + direction * getPrecisionStep();
+  editingState.valueInput = `${formatIncrementedNumber(nextValue)}${match[2] ?? ""}`;
+  applyEditingValueLive(true);
+  focusEditingInput("value");
+  return true;
+}
+
+function renderInlineSuggestions(): m.Children {
+  if (
+    !editingState.showSuggestionList ||
+    editingState.filteredSuggestions.length === 0
+  ) {
+    return null;
+  }
 
   return m(
-    ".attr-dialog-backdrop",
-    {
-      onclick: (e: MouseEvent) => {
-        if (e.target === e.currentTarget) closeAttributeDialog();
-      },
-    },
-    [
+    ".attr-suggestion-list.inline",
+    editingState.filteredSuggestions.map((suggestion, index) =>
       m(
-        ".attr-dialog",
+        "button.attr-suggestion-item",
         {
-          onclick: (e: MouseEvent) => e.stopPropagation(),
+          class: index === editingState.selectedSuggestionIndex ? "selected" : "",
+          type: "button",
+          onmouseenter: () => {
+            editingState.selectedSuggestionIndex = index;
+          },
+          onmousedown: (e: MouseEvent) => e.preventDefault(),
+          onclick: (e: MouseEvent) => {
+            e.stopPropagation();
+            editingState.nameInput = suggestion;
+            updateInlineSuggestionState(suggestion);
+            syncInlineValueFromExistingAttribute();
+            editingState.showSuggestionList = false;
+            editingState.field = "value";
+            focusEditingInput("value");
+          },
         },
-        [
-          m(
-            ".attr-dialog-title",
-            `Add attribute to <${attributeDialogState.tagName}>`,
-          ),
-          m(".field", [
-            m("label", "Attribute"),
-            m("input#attr-name-input", {
-              value: attributeDialogState.name,
-              oncreate: ({ dom }: VnodeDOM) =>
-                (dom as HTMLInputElement).focus(),
-              onfocus: () => {
-                attributeDialogState.showSuggestionList =
-                  attributeDialogState.name.trim() !== "";
-              },
-              oninput: (e: Event) => {
-                attributeDialogState.name = (
-                  e.target as HTMLInputElement
-                ).value;
-                attributeDialogState.showSuggestionList =
-                  attributeDialogState.name.trim() !== "";
-                updateAttributeSuggestionState();
-                syncDialogValueFromExistingAttribute();
-              },
-              onkeydown: (e: KeyboardEvent) => {
-                e.stopPropagation();
-
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  closeAttributeDialog();
-                  return;
-                }
-
-                if (e.key === "ArrowDown") {
-                  attributeDialogState.showSuggestionList =
-                    attributeDialogState.name.trim() !== "";
-                  if (attributeDialogState.filteredSuggestions.length > 0) {
-                    e.preventDefault();
-                    attributeDialogState.selectedSuggestionIndex =
-                      (attributeDialogState.selectedSuggestionIndex + 1) %
-                      attributeDialogState.filteredSuggestions.length;
-                  }
-                  return;
-                }
-
-                if (e.key === "ArrowUp") {
-                  attributeDialogState.showSuggestionList =
-                    attributeDialogState.name.trim() !== "";
-                  if (attributeDialogState.filteredSuggestions.length > 0) {
-                    e.preventDefault();
-                    const count = attributeDialogState.filteredSuggestions.length;
-                    attributeDialogState.selectedSuggestionIndex =
-                      (attributeDialogState.selectedSuggestionIndex - 1 + count) %
-                      count;
-                  }
-                  return;
-                }
-
-                if (e.key === "Tab") {
-                  if (acceptSelectedAttributeSuggestion()) {
-                    e.preventDefault();
-                  }
-                  return;
-                }
-
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  if (acceptSelectedAttributeSuggestion()) return;
-                  applyAttributeDialog();
-                }
-              },
-            }),
-            attributeDialogState.showSuggestionList &&
-              attributeDialogState.name.trim() !== "" &&
-              attributeDialogState.filteredSuggestions.length > 0 &&
-              m(
-                ".attr-suggestion-list",
-                attributeDialogState.filteredSuggestions.map(
-                  (suggestion, index) =>
-                    m(
-                      "button.attr-suggestion-item",
-                      {
-                        class:
-                          index === attributeDialogState.selectedSuggestionIndex
-                            ? "selected"
-                            : "",
-                        type: "button",
-                        onmouseenter: () => {
-                          attributeDialogState.selectedSuggestionIndex = index;
-                        },
-                        onmousedown: (e: MouseEvent) => {
-                          e.preventDefault();
-                        },
-                        onclick: () => {
-                          attributeDialogState.name = suggestion;
-                          updateAttributeSuggestionState(suggestion);
-                          syncDialogValueFromExistingAttribute();
-                          attributeDialogState.showSuggestionList = false;
-                          const nameInput = document.getElementById(
-                            "attr-name-input",
-                          ) as HTMLInputElement | null;
-                          nameInput?.focus();
-                        },
-                      },
-                      suggestion,
-                    ),
-                ),
-              ),
-          ]),
-          m(".field", [
-            m("label", "Value"),
-            m("input", {
-              value: attributeDialogState.value,
-              oninput: (e: Event) => {
-                attributeDialogState.value = (
-                  e.target as HTMLInputElement
-                ).value;
-              },
-              onkeydown: (e: KeyboardEvent) => {
-                e.stopPropagation();
-                if (e.key === "Escape") {
-                  e.preventDefault();
-                  closeAttributeDialog();
-                }
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  applyAttributeDialog();
-                }
-              },
-            }),
-          ]),
-          m(".actions", [
-            m("button.btn", { onclick: () => closeAttributeDialog() }, "Cancel"),
-            m(
-              "button.btn.primary",
-              { onclick: () => applyAttributeDialog() },
-              "Add",
-            ),
-          ]),
-        ],
+        suggestion,
       ),
-    ],
+    ),
   );
+}
+
+function handleNameInputKeydown(e: KeyboardEvent): void {
+  e.stopPropagation();
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    cancelEditingAttribute();
+    return;
+  }
+
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    if (editingState.filteredSuggestions.length > 0) {
+      e.preventDefault();
+      const count = editingState.filteredSuggestions.length;
+      editingState.selectedSuggestionIndex =
+        e.key === "ArrowDown"
+          ? (editingState.selectedSuggestionIndex + 1) % count
+          : (editingState.selectedSuggestionIndex - 1 + count) % count;
+    }
+    return;
+  }
+
+  if (e.key === "Tab") {
+    e.preventDefault();
+    acceptSelectedInlineSuggestion();
+    editingState.field = "value";
+    focusEditingInput("value");
+    return;
+  }
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    if (editingState.valueInput === "") {
+      editingState.field = "value";
+      focusEditingInput("value");
+      return;
+    }
+    saveEditingAttribute();
+  }
+}
+
+function handleValueInputKeydown(e: KeyboardEvent): void {
+  e.stopPropagation();
+
+  if (e.key === "Escape") {
+    e.preventDefault();
+    cancelEditingAttribute();
+    return;
+  }
+
+  if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+    if (incrementEditingValue(e.key === "ArrowUp" ? 1 : -1)) {
+      e.preventDefault();
+    }
+    return;
+  }
+
+  if (e.key === "Enter") {
+    e.preventDefault();
+    saveEditingAttribute();
+  }
+}
+
+function renderAttributeEditor(path: string, attrName: string | null): m.Children {
+  const isNameActive = editingState.field === "name";
+  const nameId = inputId(path, attrName, "name");
+  const valueId = inputId(path, attrName, "value");
+
+  return m(".attribute.editing", [
+    m(".inline-edit-wrap", [
+      m("input.attr-name-input", {
+        id: nameId,
+        value: editingState.nameInput,
+        placeholder: "attribute",
+        oncreate: ({ dom }: VnodeDOM) => {
+          if (isNameActive) (dom as HTMLInputElement).focus();
+        },
+        oninput: (e: Event) => {
+          editingState.nameInput = (e.target as HTMLInputElement).value;
+          editingState.showSuggestionList = editingState.nameInput.trim() !== "";
+          updateInlineSuggestionState();
+          syncInlineValueFromExistingAttribute();
+        },
+        onfocus: () => {
+          editingState.field = "name";
+          editingState.showSuggestionList = editingState.nameInput.trim() !== "";
+        },
+        onkeydown: handleNameInputKeydown,
+        onclick: (e: MouseEvent) => e.stopPropagation(),
+      }),
+      editingState.field === "name" && renderInlineSuggestions(),
+    ]),
+    m("span.attr-separator", "="),
+    m("input.attr-value-input", {
+      id: valueId,
+      value: editingState.valueInput,
+      placeholder: "value",
+      oncreate: ({ dom }: VnodeDOM) => {
+        if (!isNameActive) (dom as HTMLInputElement).focus();
+      },
+      oninput: (e: Event) => {
+        editingState.valueInput = (e.target as HTMLInputElement).value;
+        applyEditingValueLive(true);
+      },
+      onfocus: () => {
+        editingState.field = "value";
+        editingState.showSuggestionList = false;
+      },
+      onkeydown: handleValueInputKeydown,
+      onclick: (e: MouseEvent) => e.stopPropagation(),
+    }),
+  ]);
 }
 
 // Uncontrolled Input Component to prevent Mithril redraws from interfering with typing
@@ -664,46 +877,104 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
           m("span.tag-name", node.tagName),
           m(
             ".attributes",
-            Array.from(node.attributes).map((attr) =>
-              m(".attribute", [
-                m("span.attr-name", attr.name),
-                m("span", "="),
-                m(".attr-value-container", [
-                  m(UncontrolledInput, {
-                    value: attr.value,
-                    onChange: (newValue) => {
-                      node.setAttribute(attr.name, newValue);
-                      updateFromTree(node.ownerDocument);
+            [
+              ...Array.from(node.attributes).map((attr) =>
+                editingState.path === path &&
+                editingState.originalAttrName === attr.name
+                  ? renderAttributeEditor(path, attr.name)
+                  : m(".attribute", [
+                      m(
+                        "button.attr-name",
+                        {
+                          type: "button",
+                          ondblclick: (e: MouseEvent) => {
+                            e.stopPropagation();
+                            startAttributeEditing(path, node, attr.name, "name");
+                          },
+                          onclick: (e: MouseEvent) => e.stopPropagation(),
+                          title: "Double-click to rename",
+                        },
+                        attr.name,
+                      ),
+                      m("span.attr-separator", "="),
+                      m(
+                        "button.attr-value-display",
+                        {
+                          type: "button",
+                          ondblclick: (e: MouseEvent) => {
+                            e.stopPropagation();
+                            startAttributeEditing(path, node, attr.name, "value");
+                          },
+                          onclick: (e: MouseEvent) => e.stopPropagation(),
+                          title: "Double-click to edit",
+                        },
+                        `"${attr.value}"`,
+                      ),
+                      attr.value.length > 50 && m(".attr-value-full", attr.value),
+                      m(
+                        "button.attr-remove",
+                        {
+                          title: `Remove ${attr.name}`,
+                          onclick: (e) => {
+                            e.stopPropagation();
+                            node.removeAttribute(attr.name);
+                            updateFromTree(node.ownerDocument);
+                          },
+                        },
+                        "×",
+                      ),
+                    ]),
+              ),
+              editingState.path === path &&
+              editingState.isNew &&
+              editingState.originalAttrName === null
+                ? renderAttributeEditor(path, null)
+                : m(
+                    "button.attribute.attr-add-placeholder",
+                    {
+                      type: "button",
+                      onclick: (e: MouseEvent) => {
+                        e.stopPropagation();
+                        startAttributeEditing(path, node, null, "name");
+                      },
                     },
-                  }),
-                  attr.value.length > 50 && m(".attr-value-full", attr.value),
-                ]),
-                m(
-                  "button.attr-remove",
-                  {
-                    title: `Remove ${attr.name}`,
-                    onclick: (e) => {
-                      e.stopPropagation();
-                      node.removeAttribute(attr.name);
-                      updateFromTree(node.ownerDocument);
-                    },
-                  },
-                  "×",
-                ),
-              ]),
-            ),
+                    "+ Add Attribute",
+                  ),
+            ],
           ),
           m(".node-controls", [
+            m(
+              "button.control-btn",
+              {
+                title: "Insert child element",
+                onclick: (e: MouseEvent) => openElementMenu(path, "child", e),
+              },
+              "+ child",
+            ),
+
+            !isRoot &&
+              m(
+                "button.control-btn",
+                {
+                  title: "Insert sibling element",
+                  onclick: (e: MouseEvent) =>
+                    openElementMenu(path, "sibling", e),
+                },
+                "+ sib",
+              ),
+
+            renderAddElementMenu(path),
+
             m(
               "button.control-btn",
               {
                 title: "Add attribute",
                 onclick: (e) => {
                   e.stopPropagation();
-                  openAttributeDialog(path);
+                  startAttributeEditing(path, node, null, "name");
                 },
               },
-              "+",
+              "+ attr",
             ),
 
             // ⭕ round-to-zero button (only if useful)
@@ -826,6 +1097,212 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
     ]);
   },
 };
+
+function updateElementAttribute(
+  element: Element,
+  name: string,
+  value: string | null,
+): void {
+  if (value === null || value === "") {
+    element.removeAttribute(name);
+  } else {
+    element.setAttribute(name, value);
+  }
+  updateFromTree(element.ownerDocument);
+}
+
+function getInspectorNumericAttrs(element: Element): string[] {
+  const byTag = ATTRIBUTE_SUGGESTIONS_BY_TAG[element.tagName.toLowerCase()] || [];
+  const numeric = [
+    "x",
+    "y",
+    "cx",
+    "cy",
+    "r",
+    "rx",
+    "ry",
+    "x1",
+    "y1",
+    "x2",
+    "y2",
+    "width",
+    "height",
+    "font-size",
+    "stroke-width",
+  ];
+  return Array.from(
+    new Set([
+      ...byTag.filter((name) => numeric.includes(name)),
+      ...numeric.filter((name) => element.hasAttribute(name)),
+    ]),
+  ).slice(0, 8);
+}
+
+function getColorInputValue(value: string | null): string {
+  if (value && /^#[0-9a-f]{6}$/i.test(value)) return value;
+  if (value && /^#[0-9a-f]{3}$/i.test(value)) {
+    return `#${value
+      .slice(1)
+      .split("")
+      .map((part) => part + part)
+      .join("")}`;
+  }
+  return "#cccccc";
+}
+
+function renderPropertiesInspector(
+  selectedElement: Element | null,
+  fallbackSvg: Element,
+): m.Children {
+  const element = selectedElement ?? fallbackSvg;
+  const path = selectedElement ? (optimizer.options.selectedElementPath ?? "0") : "0";
+  const visibility = element.getAttribute("display") !== "none";
+  const opacity = element.getAttribute("opacity") ?? "1";
+  const placement = elementMenuState.placement;
+
+  return m(".properties-inspector", [
+    m(".inspector-header", [
+      m("span", "Properties"),
+      m("strong", `<${element.tagName.toLowerCase()}>`),
+    ]),
+    m(".inspector-section", [
+      m(".inspector-label", "Insert"),
+      m(".segmented", [
+        m(
+          "button",
+          {
+            class: placement === "child" ? "active" : "",
+            type: "button",
+            onclick: () => {
+              elementMenuState.placement = "child";
+            },
+          },
+          "Child",
+        ),
+        path !== "0" &&
+          m(
+            "button",
+            {
+              class: placement === "sibling" ? "active" : "",
+              type: "button",
+              onclick: () => {
+                elementMenuState.placement = "sibling";
+              },
+            },
+            "Sibling",
+          ),
+      ]),
+      m(
+        ".insert-bar",
+        Object.keys(ELEMENT_TEMPLATES).map((tagName) =>
+          m(
+            "button",
+            {
+              type: "button",
+              onclick: () =>
+                insertElementAtPath(
+                  path,
+                  tagName,
+                  path === "0" ? "child" : elementMenuState.placement,
+                ),
+            },
+            tagName,
+          ),
+        ),
+      ),
+    ]),
+    m(".inspector-section", [
+      m(".inspector-label", "Quick controls"),
+      m(".property-row.compact", [
+        m("label", "Visible"),
+        m("input[type=checkbox]", {
+          checked: visibility,
+          onchange: (e: Event) => {
+            const checked = (e.target as HTMLInputElement).checked;
+            updateElementAttribute(element, "display", checked ? null : "none");
+          },
+        }),
+      ]),
+      m(".property-row", [
+        m("label", "Opacity"),
+        m("input[type=range][min=0][max=1][step=0.05]", {
+          value: opacity,
+          oninput: (e: Event) => {
+            updateElementAttribute(
+              element,
+              "opacity",
+              (e.target as HTMLInputElement).value,
+            );
+          },
+        }),
+        m("span.property-value", opacity),
+      ]),
+      ["fill", "stroke"].map((attrName) =>
+        m(".property-row", [
+          m("label", attrName),
+          m("input[type=color]", {
+            value: getColorInputValue(element.getAttribute(attrName)),
+            oninput: (e: Event) => {
+              updateElementAttribute(
+                element,
+                attrName,
+                (e.target as HTMLInputElement).value,
+              );
+            },
+          }),
+          m("input.property-text", {
+            value: element.getAttribute(attrName) ?? "",
+            placeholder: "none",
+            onchange: (e: Event) => {
+              updateElementAttribute(
+                element,
+                attrName,
+                (e.target as HTMLInputElement).value,
+              );
+            },
+          }),
+        ]),
+      ),
+    ]),
+    m(".inspector-section", [
+      m(".inspector-label", "Geometry"),
+      getInspectorNumericAttrs(element).map((attrName) =>
+        m(".property-row", [
+          m("label", attrName),
+          m("input[type=number]", {
+            step: String(getPrecisionStep()),
+            value: element.getAttribute(attrName) ?? "",
+            onchange: (e: Event) => {
+              updateElementAttribute(
+                element,
+                attrName,
+                (e.target as HTMLInputElement).value,
+              );
+            },
+          }),
+        ]),
+      ),
+    ]),
+    m(".inspector-section.attr-grid", [
+      m(".inspector-label", "Attributes"),
+      Array.from(element.attributes).map((attr) =>
+        m(".property-row", [
+          m("label", attr.name),
+          m("input.property-text", {
+            value: attr.value,
+            onchange: (e: Event) => {
+              updateElementAttribute(
+                element,
+                attr.name,
+                (e.target as HTMLInputElement).value,
+              );
+            },
+          }),
+        ]),
+      ),
+    ]),
+  ]);
+}
 
 function updateFromTree(doc: Document): void {
   optimizer.options.isUpdatingFromTree = true;
