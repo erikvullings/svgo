@@ -12,9 +12,56 @@ let isPanning = false;
 let startX = 0;
 let startY = 0;
 
-let theme: "dark" | "light" | "auto" =
-  (localStorage.getItem("svgo-theme") as "dark" | "light" | "auto") || "dark";
-let sidebarOpen = true;
+const STORAGE_THEME_KEY = "svgo-theme";
+const STORAGE_SIDEBAR_KEY = "svgo-sidebar-open";
+const STORAGE_SPLITTER_KEY = "svgo-splitter-percent";
+const SPLITTER_MIN_PERCENT = 10;
+const SPLITTER_MAX_PERCENT = 90;
+
+function getStoredValue(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function setStoredValue(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Ignore storage failures (private mode / quota / unavailable storage)
+  }
+}
+
+function clampSplitterPercent(percent: number): number {
+  return Math.max(SPLITTER_MIN_PERCENT, Math.min(SPLITTER_MAX_PERCENT, percent));
+}
+
+function readTheme(): "dark" | "light" | "auto" {
+  const stored = getStoredValue(STORAGE_THEME_KEY);
+  if (stored === "dark" || stored === "light" || stored === "auto") {
+    return stored;
+  }
+  return "dark";
+}
+
+function readSidebarOpen(): boolean {
+  const stored = getStoredValue(STORAGE_SIDEBAR_KEY);
+  if (stored === "true") return true;
+  if (stored === "false") return false;
+  return true;
+}
+
+function readSplitterPercent(): number {
+  const stored = Number(getStoredValue(STORAGE_SPLITTER_KEY));
+  if (!Number.isFinite(stored)) return 50;
+  return clampSplitterPercent(stored);
+}
+
+let theme: "dark" | "light" | "auto" = readTheme();
+let sidebarOpen = readSidebarOpen();
+let splitterPercent = readSplitterPercent();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -98,7 +145,7 @@ function applyTheme(nextTheme: "dark" | "light" | "auto") {
   theme = nextTheme;
   const resolved = resolveTheme(theme);
   document.body.classList.toggle("theme-light", resolved === "light");
-  localStorage.setItem("svgo-theme", theme);
+  setStoredValue(STORAGE_THEME_KEY, theme);
   optimizer.setEditorTheme(resolved);
 }
 
@@ -109,6 +156,19 @@ function toggleTheme() {
 
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
+  setStoredValue(STORAGE_SIDEBAR_KEY, String(sidebarOpen));
+}
+
+function applySplitterLayout(
+  left: HTMLElement,
+  right: HTMLElement,
+  percent: number,
+  totalHeight: number,
+): void {
+  const normalizedPercent = clampSplitterPercent(percent);
+  const percentSplitter = (6 / totalHeight) * 100;
+  left.style.flex = `0 0 ${normalizedPercent}%`;
+  right.style.flex = `0 0 ${100 - normalizedPercent - percentSplitter}%`;
 }
 
 function applyTransform(): void {
@@ -290,23 +350,24 @@ export const App: m.Component = {
                 const left = document.getElementById("left-panel");
                 const right = document.getElementById("right-panel");
                 if (!splitter || !left || !right) return;
+                const container = splitter.parentElement as HTMLElement | null;
+                const initialBounds = container?.getBoundingClientRect();
+                const initialTotal = initialBounds?.height ?? window.innerHeight;
+                applySplitterLayout(left, right, splitterPercent, initialTotal);
+
                 splitter.onmousedown = function (e) {
                   e.preventDefault();
-                  const container =
-                    splitter.parentElement as HTMLElement | null;
                   document.onmousemove = function (event) {
                     const bounds = container?.getBoundingClientRect();
                     const total = bounds?.height ?? window.innerHeight;
                     const offset = event.clientY - (bounds?.top ?? 0);
-                    let percent = (offset / total) * 100;
-                    let percentSplitter = (6 / total) * 100;
-                    percent = Math.max(10, Math.min(90, percent));
-                    left.style.flex = `0 0 ${percent}%`;
-                    right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
+                    splitterPercent = clampSplitterPercent((offset / total) * 100);
+                    applySplitterLayout(left, right, splitterPercent, total);
                   };
                   document.onmouseup = function () {
                     document.onmousemove = null;
                     document.onmouseup = null;
+                    setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
                   };
                 };
               },

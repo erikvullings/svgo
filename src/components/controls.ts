@@ -142,14 +142,20 @@ export const Controls: m.Component<ControlsAttrs> = {
               optimizer.saveToHistory();
             },
           }),
-          m("label", { for: "group-similar-elements" }, "Group similar elements"),
+          m(
+            "label",
+            { for: "group-similar-elements" },
+            "Group similar elements",
+          ),
         ]),
         m(".checkbox-group", [
           m("input[type=checkbox]", {
             id: "auto-autocrop",
             checked: optimizer.options.autoAutocrop,
             onchange: (e: Event) => {
-              optimizer.options.autoAutocrop = (e.target as HTMLInputElement).checked;
+              optimizer.options.autoAutocrop = (
+                e.target as HTMLInputElement
+              ).checked;
               optimizer.optimizeSvg();
               optimizer.saveToHistory();
             },
@@ -182,6 +188,8 @@ export const Controls: m.Component<ControlsAttrs> = {
               if (optimizer.options.useCustomDimensions) {
                 optimizer.optimizeSvg();
                 optimizer.saveToHistory();
+              } else {
+                optimizer.persistSessionState();
               }
             },
           }),
@@ -197,6 +205,8 @@ export const Controls: m.Component<ControlsAttrs> = {
               if (optimizer.options.useCustomDimensions) {
                 optimizer.optimizeSvg();
                 optimizer.saveToHistory();
+              } else {
+                optimizer.persistSessionState();
               }
             },
           }),

@@ -36,6 +36,28 @@ type HistoryEntry = {
   options: OptimizeOptions;
 };
 
+type PersistedOptions = Pick<
+  OptimizeOptions,
+  | "precision"
+  | "pathPrecision"
+  | "removeTspan"
+  | "removeStyling"
+  | "autoAutocrop"
+  | "customWidth"
+  | "customHeight"
+  | "useCustomDimensions"
+  | "removeDefaultValues"
+  | "removeFontFamily"
+  | "removeFontSize"
+  | "convertSodipodiArcs"
+  | "groupSimilarElements"
+>;
+
+type PersistedState = {
+  sourceSvg: string;
+  options: PersistedOptions;
+};
+
 export const vscodeApi =
   typeof acquireVsCodeApi === "function" ? acquireVsCodeApi() : undefined;
 
@@ -43,6 +65,7 @@ const PRESERVE_ATTR_NAMES = new Set(["role", "tabindex"]);
 const PRESERVE_ATTR_PREFIXES = ["data-", "aria-"];
 const BLOCKED_ATTR_PREFIXES = ["inkscape:", "sodipodi:"];
 const RESERVED_ATTR_NAME = "data-cx-id";
+const PERSISTED_STATE_KEY = "svgo-state-v1";
 
 class SVGOptimizer {
   originalSvg: string;
@@ -58,6 +81,7 @@ class SVGOptimizer {
   isRestoringHistory: boolean;
   copyStatus: "idle" | "copied";
   copyResetTimer: ReturnType<typeof setTimeout> | null;
+  persistenceEnabled: boolean;
 
   constructor() {
     this.originalSvg = "";
@@ -98,6 +122,8 @@ class SVGOptimizer {
     this.isRestoringHistory = false;
     this.copyStatus = "idle";
     this.copyResetTimer = null;
+    this.persistenceEnabled = this.canUseLocalStorage();
+    this.restoreFromStorage();
     // Initialize with empty state
     this.saveToHistory();
 
@@ -110,6 +136,156 @@ class SVGOptimizer {
       return this.editor.getValue();
     }
     return this.originalSvg;
+  }
+
+  canUseLocalStorage(): boolean {
+    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      return false;
+    }
+    if (
+      typeof import.meta !== "undefined" &&
+      Boolean((import.meta as any).vitest)
+    ) {
+      return false;
+    }
+    try {
+      const testKey = "__svgo_storage_test__";
+      localStorage.setItem(testKey, "1");
+      localStorage.removeItem(testKey);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  getPersistedOptions(): PersistedOptions {
+    return {
+      precision: this.options.precision,
+      pathPrecision: this.options.pathPrecision,
+      removeTspan: this.options.removeTspan,
+      removeStyling: this.options.removeStyling,
+      autoAutocrop: this.options.autoAutocrop,
+      customWidth: this.options.customWidth,
+      customHeight: this.options.customHeight,
+      useCustomDimensions: this.options.useCustomDimensions,
+      removeDefaultValues: this.options.removeDefaultValues,
+      removeFontFamily: this.options.removeFontFamily,
+      removeFontSize: this.options.removeFontSize,
+      convertSodipodiArcs: this.options.convertSodipodiArcs,
+      groupSimilarElements: this.options.groupSimilarElements,
+    };
+  }
+
+  applyPersistedOptions(raw: Partial<PersistedOptions>): void {
+    const asInt = (
+      value: unknown,
+      fallback: number,
+      min: number,
+      max: number,
+    ): number => {
+      const parsed = Number(value);
+      if (!Number.isFinite(parsed)) return fallback;
+      const rounded = Math.round(parsed);
+      return Math.min(max, Math.max(min, rounded));
+    };
+    const asBool = (value: unknown, fallback: boolean): boolean =>
+      typeof value === "boolean" ? value : fallback;
+
+    this.options.precision = asInt(raw.precision, this.options.precision, 0, 5);
+    this.options.pathPrecision = asInt(
+      raw.pathPrecision,
+      this.options.pathPrecision,
+      0,
+      5,
+    );
+    this.options.customWidth = asInt(
+      raw.customWidth,
+      this.options.customWidth,
+      1,
+      100000,
+    );
+    this.options.customHeight = asInt(
+      raw.customHeight,
+      this.options.customHeight,
+      1,
+      100000,
+    );
+    this.options.removeTspan = asBool(
+      raw.removeTspan,
+      this.options.removeTspan,
+    );
+    this.options.removeStyling = asBool(
+      raw.removeStyling,
+      this.options.removeStyling,
+    );
+    this.options.autoAutocrop = asBool(
+      raw.autoAutocrop,
+      this.options.autoAutocrop,
+    );
+    this.options.useCustomDimensions = asBool(
+      raw.useCustomDimensions,
+      this.options.useCustomDimensions,
+    );
+    this.options.removeDefaultValues = asBool(
+      raw.removeDefaultValues,
+      this.options.removeDefaultValues,
+    );
+    this.options.removeFontFamily = asBool(
+      raw.removeFontFamily,
+      this.options.removeFontFamily,
+    );
+    this.options.removeFontSize = asBool(
+      raw.removeFontSize,
+      this.options.removeFontSize,
+    );
+    this.options.convertSodipodiArcs = asBool(
+      raw.convertSodipodiArcs,
+      this.options.convertSodipodiArcs,
+    );
+    this.options.groupSimilarElements = asBool(
+      raw.groupSimilarElements,
+      this.options.groupSimilarElements,
+    );
+  }
+
+  restoreFromStorage(): void {
+    if (!this.persistenceEnabled) return;
+
+    try {
+      const raw = localStorage.getItem(PERSISTED_STATE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<PersistedState>;
+
+      if (parsed.options && typeof parsed.options === "object") {
+        this.applyPersistedOptions(parsed.options);
+      }
+
+      if (typeof parsed.sourceSvg === "string" && parsed.sourceSvg.trim()) {
+        this.originalSvg = this.normalizeNamespaces(parsed.sourceSvg);
+        this.updateTreeDoc();
+        void this.optimizeSvg();
+      }
+    } catch (error) {
+      console.warn("Failed to restore SVGO state from localStorage:", error);
+    }
+  }
+
+  persistState(): void {
+    if (!this.persistenceEnabled) return;
+
+    try {
+      const state: PersistedState = {
+        sourceSvg: this.getSourceSvg() || "",
+        options: this.getPersistedOptions(),
+      };
+      localStorage.setItem(PERSISTED_STATE_KEY, JSON.stringify(state));
+    } catch (error) {
+      console.warn("Failed to persist SVGO state to localStorage:", error);
+    }
+  }
+
+  persistSessionState(): void {
+    this.persistState();
   }
 
   isOptimizationEnabled(): boolean {
@@ -989,7 +1165,11 @@ class SVGOptimizer {
       "stroke-dashoffset",
     ]);
     const stripAttrNames = new Set(["enable-background"]);
-    const stripNamespacedAttrs = new Set(["viewOrigin", "rulerOrigin", "pageBounds"]);
+    const stripNamespacedAttrs = new Set([
+      "viewOrigin",
+      "rulerOrigin",
+      "pageBounds",
+    ]);
 
     const elements: Element[] = [];
     if (doc.documentElement) elements.push(doc.documentElement);
@@ -1022,7 +1202,9 @@ class SVGOptimizer {
           );
         }
         const normalized = value ? value.trim() : value;
-        const normalizedLower = normalized ? normalized.toLowerCase() : normalized;
+        const normalizedLower = normalized
+          ? normalized.toLowerCase()
+          : normalized;
         const isDefault =
           normalized &&
           defaultValues[attr].some(
@@ -2177,6 +2359,7 @@ class SVGOptimizer {
     }
 
     this.historyPointer = this.history.length - 1;
+    this.persistState();
     this.notifyVscode();
     m.redraw();
   }
@@ -2215,6 +2398,7 @@ class SVGOptimizer {
 
     this.updateTreeDoc();
     this.optimizeSvg();
+    this.persistState();
     this.isRestoringHistory = false;
     m.redraw();
   }
@@ -2236,6 +2420,7 @@ class SVGOptimizer {
 
     this.updateTreeDoc();
     this.optimizeSvg();
+    this.persistState();
     this.isRestoringHistory = false;
     m.redraw();
   }
