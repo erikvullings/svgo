@@ -6,11 +6,8 @@ export const ROUNDABLE_ATTRS = new Set([
   'stroke-width', 'font-size'
 ]);
 
-export const ZERO_SENSITIVE_ATTRS = new Set([
-  'width', 'height',
-  'r', 'rx', 'ry',
+export const OPACITY_ATTRS = new Set([
   'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
-  'stroke-width', 'font-size'
 ]);
 
 export const NUMERIC_ATTRS = new Set([
@@ -144,17 +141,15 @@ export function roundNumericValueFixed(value: string, precision: number, attrNam
   const num = parseFloat(value);
   if (!Number.isFinite(num)) return value;
 
-  if (num !== 0 && attrName && ZERO_SENSITIVE_ATTRS.has(attrName.toLowerCase())) {
-    let p = precision;
-    let rounded = parseFloat(num.toFixed(p));
-    while (rounded === 0 && p < 4) {
-      p++;
-      rounded = parseFloat(num.toFixed(p));
-    }
-    if (rounded === 0) {
-      return formatNumberCompact(parseFloat(num.toFixed(4)));
-    }
-    return formatNumberCompact(rounded);
+  const normalizedAttr = attrName?.toLowerCase();
+  const shouldKeepOneDecimal =
+    precision === 0 &&
+    normalizedAttr &&
+    (OPACITY_ATTRS.has(normalizedAttr) ||
+      (normalizedAttr === 'stroke-width' && Math.abs(num) < 0.5));
+
+  if (shouldKeepOneDecimal) {
+    return formatNumberCompact(parseFloat(num.toFixed(1)));
   }
 
   if (precision === 0) return formatNumberCompact(Math.round(num));

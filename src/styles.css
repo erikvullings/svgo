@@ -828,9 +828,44 @@
       border-color: var(--accent);
     }
 
-    .tree-node-header.drag-over {
-      border: 2px dashed var(--accent);
-      background: var(--panel-2);
+    .tree-node-header.drag-over-before::before,
+    .tree-node-header.drag-over-after::after,
+    .tree-drop-end.drag-over-end::after {
+      content: "";
+      position: absolute;
+      left: 0.25rem;
+      right: 0.25rem;
+      height: 2px;
+      background: var(--accent);
+      box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+      pointer-events: none;
+    }
+
+    .tree-node-header.drag-over-before::before {
+      top: -1px;
+    }
+
+    .tree-node-header.drag-over-after::after {
+      bottom: -1px;
+    }
+
+    .tree-node-header.drag-over-inside {
+      background: color-mix(in srgb, var(--accent) 14%, var(--panel-2));
+      outline: 1px dashed var(--accent);
+      outline-offset: -2px;
+    }
+
+    .tree-drop-end {
+      position: relative;
+      display: flex;
+      align-items: center;
+      min-height: 14px;
+      width: 100%;
+    }
+
+    .tree-drop-end.drag-over-end::after {
+      top: 50%;
+      transform: translateY(-50%);
     }
 
     .tree-prefix {

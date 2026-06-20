@@ -30,6 +30,7 @@ type TreeNodeAttrs = {
 };
 
 type EditingField = "name" | "value";
+type DropPlacement = "before" | "inside" | "after" | "end";
 
 export const TreeView: m.Component = {
   view() {
@@ -64,8 +65,9 @@ export const TreeView: m.Component = {
   },
 };
 
-let dragSourcePath = null;
-let dragOverPath = null;
+let dragSourcePath: string | null = null;
+let dragOverPath: string | null = null;
+let dragOverPlacement: DropPlacement | null = null;
 
 const COMMON_ATTRIBUTE_SUGGESTIONS = [
   "id",
@@ -212,6 +214,49 @@ const editingState: {
   selectedSuggestionIndex: 0,
   showSuggestionList: false,
 };
+
+function clearDragTarget() {
+  dragOverPath = null;
+  dragOverPlacement = null;
+}
+
+function getDragTargetClass(path: string, placement: DropPlacement) {
+  return dragOverPath === path && dragOverPlacement === placement
+    ? `drag-over-${placement}`
+    : "";
+}
+
+function getRowDropPlacement(
+  event: DragEvent,
+  canInsertChild: boolean,
+  isRoot: boolean,
+): DropPlacement {
+  if (isRoot) return "inside";
+
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const offsetY = event.clientY - rect.top;
+  const topZone = rect.height * 0.3;
+  const bottomZone = rect.height * 0.7;
+
+  if (offsetY < topZone) return "before";
+  if (offsetY > bottomZone) return "after";
+  return canInsertChild ? "inside" : offsetY < rect.height / 2 ? "before" : "after";
+}
+
+function isPathInside(sourcePath: string, targetPath: string) {
+  return targetPath.startsWith(`${sourcePath}.`);
+}
+
+function canDropElement(
+  sourcePath: string,
+  targetPath: string,
+  placement: DropPlacement,
+) {
+  if (!sourcePath || sourcePath === targetPath) return false;
+  if (isPathInside(sourcePath, targetPath)) return false;
+  return true;
+}
 
 function getAttributeSuggestionsForElement(element: Element) {
   const tagName = element.tagName.toLowerCase();
@@ -840,20 +885,38 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
         ".tree-node-header",
         {
           id: `node-${path.replace(/\./g, "-")}`,
-          class: `${isSelected ? "selected" : ""} ${dragOverPath === path ? "drag-over" : ""}`,
+          class: [
+            isSelected ? "selected" : "",
+            getDragTargetClass(path, "before"),
+            getDragTargetClass(path, "inside"),
+            getDragTargetClass(path, "after"),
+          ].join(" "),
           draggable: !isRoot,
           ondragstart: (e: DragEvent) => {
             dragSourcePath = path;
             e.dataTransfer.setData("text/plain", path);
+            e.dataTransfer.effectAllowed = "move";
             e.stopPropagation();
+          },
+          ondragend: () => {
+            dragSourcePath = null;
+            clearDragTarget();
           },
           ondragover: (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation();
+            const placement = getRowDropPlacement(e, canInsertChild, isRoot);
+            const sourcePath = dragSourcePath ?? "";
+            if (!canDropElement(sourcePath, path, placement)) {
+              clearDragTarget();
+              return;
+            }
+            if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
             dragOverPath = path;
+            dragOverPlacement = placement;
           },
           ondragleave: () => {
-            if (dragOverPath === path) dragOverPath = null;
+            if (dragOverPath === path) clearDragTarget();
           },
           ondrop: (e: DragEvent) => {
             e.preventDefault();
@@ -861,10 +924,11 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             const sourcePath = e.dataTransfer
               ? e.dataTransfer.getData("text/plain")
               : "";
-            if (sourcePath && sourcePath !== path) {
-              moveElementTo(sourcePath, path);
+            const placement = dragOverPlacement ?? "inside";
+            if (canDropElement(sourcePath, path, placement)) {
+              moveElementTo(sourcePath, path, placement);
             }
-            dragOverPath = null;
+            clearDragTarget();
             dragSourcePath = null;
           },
           onclick: (e: MouseEvent) => {
@@ -1085,6 +1149,44 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
           }
         }),
       ),
+      canInsertChild &&
+        dragSourcePath &&
+        m(
+          ".tree-drop-end",
+          {
+            class: getDragTargetClass(path, "end"),
+            ondragover: (e: DragEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const sourcePath = dragSourcePath ?? "";
+              if (!canDropElement(sourcePath, path, "end")) {
+                clearDragTarget();
+                return;
+              }
+              if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+              dragOverPath = path;
+              dragOverPlacement = "end";
+            },
+            ondragleave: () => {
+              if (dragOverPath === path && dragOverPlacement === "end") {
+                clearDragTarget();
+              }
+            },
+            ondrop: (e: DragEvent) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const sourcePath = e.dataTransfer
+                ? e.dataTransfer.getData("text/plain")
+                : "";
+              if (canDropElement(sourcePath, path, "end")) {
+                moveElementTo(sourcePath, path, "end");
+              }
+              clearDragTarget();
+              dragSourcePath = null;
+            },
+          },
+          m("span.tree-prefix", childPrefix),
+        ),
     ]);
   },
 };
@@ -1310,22 +1412,55 @@ function updateFromTree(doc: Document): void {
   m.redraw();
 }
 
-function moveElementTo(sourcePath: string, targetPath: string): void {
-  if (sourcePath === targetPath) return;
+function getElementPath(root: Element, element: Element): string | null {
+  if (root === element) return "0";
+  const path: number[] = [];
+  let current: Element | null = element;
+
+  while (current && current !== root) {
+    const parent = current.parentElement;
+    if (!parent) return null;
+    path.unshift(Array.from(parent.children).indexOf(current));
+    current = parent;
+  }
+
+  return current === root ? `0.${path.join(".")}` : null;
+}
+
+function moveElementTo(
+  sourcePath: string,
+  targetPath: string,
+  placement: DropPlacement,
+): void {
+  if (!canDropElement(sourcePath, targetPath, placement)) return;
 
   const doc = optimizer.options.treeDoc;
   const source = getElementByPath(doc, sourcePath);
   const target = getElementByPath(doc, targetPath);
 
   if (source && target) {
-    const targetParent = target.parentElement;
-
-    if (target.tagName === "g" || target.tagName === "svg") {
-      target.insertBefore(source, target.firstChild);
-    } else if (targetParent) {
-      targetParent.insertBefore(source, target);
+    if (
+      (placement === "inside" || placement === "end") &&
+      !canContainSvgElements(target)
+    ) {
+      return;
     }
 
+    const targetParent = target.parentElement;
+
+    if (placement === "inside") {
+      target.insertBefore(source, target.firstElementChild);
+    } else if (placement === "end") {
+      target.appendChild(source);
+    } else if (placement === "before" && targetParent) {
+      targetParent.insertBefore(source, target);
+    } else if (placement === "after" && targetParent) {
+      targetParent.insertBefore(source, target.nextElementSibling);
+    }
+
+    const svg = doc.querySelector("svg");
+    const movedPath = svg ? getElementPath(svg, source) : null;
+    if (movedPath) optimizer.options.selectedElementPath = movedPath;
     updateFromTree(doc);
   }
 }
