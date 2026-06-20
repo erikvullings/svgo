@@ -51,6 +51,7 @@ type PersistedOptions = Pick<
   | "removeFontSize"
   | "convertSodipodiArcs"
   | "groupSimilarElements"
+  | "viewMode"
 >;
 
 type PersistedState = {
@@ -173,6 +174,7 @@ class SVGOptimizer {
       removeFontSize: this.options.removeFontSize,
       convertSodipodiArcs: this.options.convertSodipodiArcs,
       groupSimilarElements: this.options.groupSimilarElements,
+      viewMode: this.options.viewMode,
     };
   }
 
@@ -190,6 +192,11 @@ class SVGOptimizer {
     };
     const asBool = (value: unknown, fallback: boolean): boolean =>
       typeof value === "boolean" ? value : fallback;
+    const asViewMode = (
+      value: unknown,
+      fallback: OptimizeOptions["viewMode"],
+    ): OptimizeOptions["viewMode"] =>
+      value === "code" || value === "tree" ? value : fallback;
 
     this.options.precision = asInt(raw.precision, this.options.precision, 0, 5);
     this.options.pathPrecision = asInt(
@@ -246,6 +253,7 @@ class SVGOptimizer {
       raw.groupSimilarElements,
       this.options.groupSimilarElements,
     );
+    this.options.viewMode = asViewMode(raw.viewMode, this.options.viewMode);
   }
 
   restoreFromStorage(): void {

@@ -20,7 +20,10 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
             "button.view-toggle",
             {
               class: optimizer.options.viewMode === "code" ? "active" : "",
-              onclick: () => (optimizer.options.viewMode = "code"),
+              onclick: () => {
+                optimizer.options.viewMode = "code";
+                optimizer.persistSessionState();
+              },
             },
             [iconCode(), m("span", "Code")],
           ),
@@ -28,7 +31,10 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
             "button.view-toggle",
             {
               class: optimizer.options.viewMode === "tree" ? "active" : "",
-              onclick: () => (optimizer.options.viewMode = "tree"),
+              onclick: () => {
+                optimizer.options.viewMode = "tree";
+                optimizer.persistSessionState();
+              },
             },
             [iconTree(), m("span", "Tree")],
           ),
