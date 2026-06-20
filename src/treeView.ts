@@ -52,12 +52,21 @@ export const TreeView: m.Component = {
     const svg = optimizer.options.treeDoc.querySelector("svg");
 
     if (!svg) return m(".tree-view", "Invalid SVG");
-    const selectedElement = optimizer.options.selectedElementPath
-      ? getElementByPath(
-          optimizer.options.treeDoc,
-          optimizer.options.selectedElementPath,
-        )
-      : svg;
+    const selectedPath = optimizer.options.selectedElementPath;
+    const selectedTextNode = selectedPath
+      ? getTextNodeByPath(optimizer.options.treeDoc, selectedPath)
+      : null;
+    const selectedElement =
+      selectedTextNode?.parentElement ??
+      (selectedPath
+        ? getElementByPath(optimizer.options.treeDoc, selectedPath)
+        : svg) ??
+      svg;
+    const inspectorPath = selectedPath
+      ? selectedTextNode
+        ? getParentPath(selectedPath)
+        : selectedPath
+      : "0";
 
     return m(".tree-view", [
       m(".tree-layout", [
@@ -70,7 +79,12 @@ export const TreeView: m.Component = {
             isLast: true,
           }),
         ]),
-        renderPropertiesInspector(selectedElement, svg),
+        renderPropertiesInspector(
+          selectedElement,
+          svg,
+          inspectorPath,
+          selectedTextNode,
+        ),
       ]),
     ]);
   },
@@ -1391,12 +1405,62 @@ function updateElementAttribute(
   name: string,
   value: string | null,
 ): void {
-  if (value === null || value === "") {
+  const normalizedName = name.toLowerCase();
+  const normalizedValue =
+    typeof value === "string" && NUMERIC_ATTRS.has(normalizedName)
+      ? normalizeDecimalNotation(value)
+      : value;
+
+  if (normalizedValue === null || normalizedValue === "") {
     element.removeAttribute(name);
   } else {
-    element.setAttribute(name, value);
+    element.setAttribute(name, normalizedValue);
   }
   updateFromTree(element.ownerDocument);
+}
+
+function normalizeDecimalNotation(value: string): string {
+  return value.replace(/,/g, ".");
+}
+
+function normalizeNumericAttrValue(attrName: string, value: string): string {
+  return NUMERIC_ATTRS.has(attrName.toLowerCase())
+    ? normalizeDecimalNotation(value)
+    : value;
+}
+
+function getParentPath(path: string): string {
+  const parts = path.split(".");
+  return parts.length > 1 ? parts.slice(0, -1).join(".") : "0";
+}
+
+function getTextNodeByPath(doc: Document, path: string): Text | null {
+  const parts = path.split(".");
+  let current: Element | Text | null = doc.querySelector("svg");
+  if (!current || parts[0] !== "0") return null;
+
+  for (let i = 1; i < parts.length; i += 1) {
+    const indexStr = parts[i];
+    const textMatch = indexStr.match(/^\[-(\d+)\]$/);
+
+    if (textMatch) {
+      if (current.nodeType !== 1) return null;
+      const nodeIndex = Number.parseInt(textMatch[1], 10) - 1;
+      const childNodes = Array.from((current as Element).childNodes);
+      const resolvedNode = childNodes[nodeIndex] ?? null;
+      if (!resolvedNode || resolvedNode.nodeType !== 3) return null;
+      current = resolvedNode;
+      continue;
+    }
+
+    const childIndex = Number.parseInt(indexStr, 10);
+    if (Number.isNaN(childIndex) || current.nodeType !== 1) return null;
+
+    current = ((current as Element).children[childIndex] as Element) ?? null;
+    if (!current) return null;
+  }
+
+  return current?.nodeType === 3 ? (current as Text) : null;
 }
 
 function getInspectorNumericAttrs(element: Element): string[] {
@@ -1439,70 +1503,79 @@ function getColorInputValue(value: string | null): string {
   return "#cccccc";
 }
 
+function getDirectTextNodes(element: Element): Text[] {
+  return Array.from(element.childNodes).filter(
+    (node) => node.nodeType === 3,
+  ) as Text[];
+}
+
+function getDirectTextContent(element: Element): string {
+  return getDirectTextNodes(element)
+    .map((node) => node.textContent ?? "")
+    .join("");
+}
+
+function setDirectTextContent(element: Element, value: string): void {
+  const directTextNodes = getDirectTextNodes(element);
+  if (directTextNodes.length > 0) {
+    directTextNodes[0].textContent = value;
+    for (let i = 1; i < directTextNodes.length; i += 1) {
+      directTextNodes[i].remove();
+    }
+    return;
+  }
+
+  const textNode = element.ownerDocument.createTextNode(value);
+  element.insertBefore(textNode, element.firstChild);
+}
+
 function renderPropertiesInspector(
   selectedElement: Element | null,
   fallbackSvg: Element,
+  selectedPath: string,
+  selectedTextNode: Text | null,
 ): m.Children {
   const element = selectedElement ?? fallbackSvg;
-  const path = selectedElement
-    ? (optimizer.options.selectedElementPath ?? "0")
-    : "0";
+  const path = selectedPath || "0";
   const visibility = element.getAttribute("display") !== "none";
-  const opacity = element.getAttribute("opacity") ?? "1";
+  const opacity = normalizeNumericAttrValue(
+    "opacity",
+    element.getAttribute("opacity") ?? "1",
+  );
   const canInsertChild = canContainSvgElements(element);
-  const placement = canInsertChild ? elementMenuState.placement : "sibling";
+  const canInsertSibling = path !== "0";
+  const hasBothInsertModes = canInsertChild && canInsertSibling;
+  const placement: ElementPlacement = hasBothInsertModes
+    ? elementMenuState.placement
+    : canInsertChild
+      ? "child"
+      : "sibling";
+
+  const geometryAttrs = getInspectorNumericAttrs(element);
+  const quickControlAttrs = new Set(["display", "opacity", "fill", "stroke"]);
+  const geometryAttrSet = new Set(
+    geometryAttrs.map((name) => name.toLowerCase()),
+  );
+  const filteredAttributes = Array.from(element.attributes).filter((attr) => {
+    const attrName = attr.name.toLowerCase();
+    return !quickControlAttrs.has(attrName) && !geometryAttrSet.has(attrName);
+  });
+
+  const showTextQuickControl =
+    (selectedTextNode !== null &&
+      selectedTextNode.parentElement?.tagName.toLowerCase() !== "tspan") ||
+    element.tagName.toLowerCase() === "text";
+  const quickTextValue =
+    selectedTextNode !== null
+      ? (selectedTextNode.textContent ?? "")
+      : element.tagName.toLowerCase() === "text"
+        ? getDirectTextContent(element)
+        : "";
 
   return m(".properties-inspector", [
     m(".inspector-header", [
       m("span", "Properties"),
       m("strong", `<${element.tagName.toLowerCase()}>`),
-    ]),
-    m(".inspector-section", [
-      m(".inspector-label", "Insert"),
-      m(".segmented", [
-        canInsertChild &&
-          m(
-            "button",
-            {
-              class: placement === "child" ? "active" : "",
-              type: "button",
-              onclick: () => {
-                elementMenuState.placement = "child";
-              },
-            },
-            "Child",
-          ),
-        path !== "0" &&
-          m(
-            "button",
-            {
-              class: placement === "sibling" ? "active" : "",
-              type: "button",
-              onclick: () => {
-                elementMenuState.placement = "sibling";
-              },
-            },
-            "Sibling",
-          ),
-      ]),
-      m(
-        ".insert-bar",
-        Object.keys(ELEMENT_TEMPLATES).map((tagName) =>
-          m(
-            "button",
-            {
-              type: "button",
-              onclick: () =>
-                insertElementAtPath(
-                  path,
-                  tagName,
-                  path === "0" ? "child" : placement,
-                ),
-            },
-            tagName,
-          ),
-        ),
-      ),
     ]),
     m(".inspector-section", [
       m(".inspector-label", "Quick controls"),
@@ -1530,8 +1603,24 @@ function renderPropertiesInspector(
         }),
         m("span.property-value", opacity),
       ]),
+      showTextQuickControl &&
+        m(".property-row.text-row", [
+          m("label", "Text"),
+          m("input.property-text", {
+            value: quickTextValue,
+            onchange: (e: Event) => {
+              const nextValue = (e.target as HTMLInputElement).value;
+              if (selectedTextNode) {
+                selectedTextNode.textContent = nextValue;
+              } else if (element.tagName.toLowerCase() === "text") {
+                setDirectTextContent(element, nextValue);
+              }
+              updateFromTree(element.ownerDocument);
+            },
+          }),
+        ]),
       ["fill", "stroke"].map((attrName) =>
-        m(".property-row", [
+        m(".property-row.color-row", [
           m("label", attrName),
           m("input[type=color]", {
             value: getColorInputValue(element.getAttribute(attrName)),
@@ -1557,43 +1646,102 @@ function renderPropertiesInspector(
         ]),
       ),
     ]),
-    m(".inspector-section", [
-      m(".inspector-label", "Geometry"),
-      getInspectorNumericAttrs(element).map((attrName) =>
-        m(".property-row", [
-          m("label", attrName),
-          m("input[type=number]", {
-            step: String(
-              getPrecisionStep(attrName, element.getAttribute(attrName)),
-            ),
-            value: element.getAttribute(attrName) ?? "",
-            onchange: (e: Event) => {
-              updateElementAttribute(
-                element,
+    geometryAttrs.length > 0 &&
+      m(".inspector-section", [
+        m(".inspector-label", "Geometry"),
+        geometryAttrs.map((attrName) =>
+          m(".property-row", [
+            m("label", attrName),
+            m("input[type=number]", {
+              lang: "en",
+              step: String(
+                getPrecisionStep(attrName, element.getAttribute(attrName)),
+              ),
+              value: normalizeNumericAttrValue(
                 attrName,
-                (e.target as HTMLInputElement).value,
-              );
+                element.getAttribute(attrName) ?? "",
+              ),
+              onchange: (e: Event) => {
+                updateElementAttribute(
+                  element,
+                  attrName,
+                  normalizeNumericAttrValue(
+                    attrName,
+                    (e.target as HTMLInputElement).value,
+                  ),
+                );
+              },
+            }),
+          ]),
+        ),
+      ]),
+    filteredAttributes.length > 0 &&
+      m(".inspector-section.attr-grid", [
+        m(".inspector-label", "Attributes"),
+        filteredAttributes.map((attr) =>
+          m(".property-row", [
+            m("label", attr.name),
+            m("input.property-text", {
+              value: normalizeNumericAttrValue(attr.name, attr.value),
+              onchange: (e: Event) => {
+                updateElementAttribute(
+                  element,
+                  attr.name,
+                  normalizeNumericAttrValue(
+                    attr.name,
+                    (e.target as HTMLInputElement).value,
+                  ),
+                );
+              },
+            }),
+          ]),
+        ),
+      ]),
+    m(".inspector-section", [
+      hasBothInsertModes
+        ? m(".inspector-inline-header", [
+            m(".inspector-label", "Insert"),
+            m(".segmented", [
+              m(
+                "button",
+                {
+                  class: placement === "child" ? "active" : "",
+                  type: "button",
+                  onclick: () => {
+                    elementMenuState.placement = "child";
+                  },
+                },
+                "Child",
+              ),
+              m(
+                "button",
+                {
+                  class: placement === "sibling" ? "active" : "",
+                  type: "button",
+                  onclick: () => {
+                    elementMenuState.placement = "sibling";
+                  },
+                },
+                "Sibling",
+              ),
+            ]),
+          ])
+        : m(
+            ".inspector-label",
+            canInsertChild ? "INSERT CHILD" : "INSERT SIBLING",
+          ),
+      m(
+        ".insert-bar",
+        Object.keys(ELEMENT_TEMPLATES).map((tagName) =>
+          m(
+            "button",
+            {
+              type: "button",
+              onclick: () => insertElementAtPath(path, tagName, placement),
             },
-          }),
-        ]),
-      ),
-    ]),
-    m(".inspector-section.attr-grid", [
-      m(".inspector-label", "Attributes"),
-      Array.from(element.attributes).map((attr) =>
-        m(".property-row", [
-          m("label", attr.name),
-          m("input.property-text", {
-            value: attr.value,
-            onchange: (e: Event) => {
-              updateElementAttribute(
-                element,
-                attr.name,
-                (e.target as HTMLInputElement).value,
-              );
-            },
-          }),
-        ]),
+            tagName,
+          ),
+        ),
       ),
     ]),
   ]);
