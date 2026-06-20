@@ -433,6 +433,10 @@ button:hover,
   border-color: var(--accent);
 }
 
+.header-optimize-btn {
+  margin-right: 0;
+}
+
 .editor-hidden {
   display: none;
 }

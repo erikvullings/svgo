@@ -15,7 +15,6 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
     return m(".editor-panel", [
       m(".panel-header", [
         m("span", "Source SVG"),
-        sourceSvg ? m("span", `${sourceSvg.split("\n").length} lines`) : null,
         m(
           "div.editor-actions",
           [

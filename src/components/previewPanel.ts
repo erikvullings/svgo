@@ -1,8 +1,6 @@
 import m from "mithril";
 export type PreviewPanelAttrs = {
   previewSvg: string;
-  canOptimize: boolean;
-  onOptimize: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
@@ -35,8 +33,6 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
   view({ attrs }) {
     const {
       previewSvg,
-      canOptimize,
-      onOptimize,
       onZoomIn,
       onZoomOut,
       onResetZoom,
@@ -45,17 +41,8 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
     return m(".preview-panel#right-panel", [
       m(".panel-header", [
         m("span", "Optimized SVG"),
-        (canOptimize || previewSvg) &&
+        previewSvg &&
           m("div.preview-controls", [
-            m(
-              "button.preview-control-btn",
-              {
-                onclick: onOptimize,
-                disabled: canOptimize ? undefined : "disabled",
-                title: "Apply optimized SVG to source",
-              },
-              "Optimize",
-            ),
             m("button.preview-control-btn", { onclick: onZoomIn }, "+"),
             m("button.preview-control-btn", { onclick: onZoomOut }, "−"),
             m("button.preview-control-btn", { onclick: onResetZoom }, "Reset"),

@@ -341,7 +341,12 @@ export const App: m.Component = {
           showDownload,
         }),
         m(".app-main", [
-          m(Header, { stats: headerStats, onToggleSidebar: toggleSidebar }),
+          m(Header, {
+            stats: headerStats,
+            onToggleSidebar: toggleSidebar,
+            canOptimize: hasSource,
+            onOptimize: () => optimizer.loadOptimizedFile(),
+          }),
           m(
             ".main-content",
             {
@@ -383,8 +388,6 @@ export const App: m.Component = {
               m("div#dragbar.dragbar"),
               m(PreviewPanel, {
                 previewSvg,
-                canOptimize: hasSource,
-                onOptimize: () => optimizer.loadOptimizedFile(),
                 onZoomIn: () => zoomSvg(1.2),
                 onZoomOut: () => zoomSvg(0.8),
                 onResetZoom: () => resetZoom(),

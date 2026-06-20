@@ -846,6 +846,11 @@ function handleNameInputKeydown(e: KeyboardEvent): void {
 
   if (e.key === "Enter") {
     e.preventDefault();
+    if (acceptSelectedInlineSuggestion()) {
+      editingState.field = "value";
+      focusEditingInput("value");
+      return;
+    }
     if (editingState.valueInput === "") {
       editingState.field = "value";
       focusEditingInput("value");

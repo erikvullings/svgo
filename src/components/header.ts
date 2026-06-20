@@ -10,11 +10,13 @@ export type HeaderStats = {
 export type HeaderAttrs = {
   stats: HeaderStats;
   onToggleSidebar: () => void;
+  canOptimize: boolean;
+  onOptimize: () => void;
 };
 
 export const Header: m.Component<HeaderAttrs> = {
   view({ attrs }) {
-    const { stats, onToggleSidebar } = attrs;
+    const { stats, onToggleSidebar, canOptimize, onOptimize } = attrs;
     return m(".header", [
       m(".header-left", [
         m(
@@ -28,6 +30,15 @@ export const Header: m.Component<HeaderAttrs> = {
         ]),
       ]),
       m(".stats", [
+        m(
+          "button.view-toggle.active.header-optimize-btn",
+          {
+            onclick: onOptimize,
+            disabled: canOptimize ? undefined : true,
+            title: "Apply optimized SVG to source",
+          },
+          "Optimize",
+        ),
         m(".stat", [
           m(".stat-label", "Original"),
           m(".stat-value", stats.originalSizeLabel),
