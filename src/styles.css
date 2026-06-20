@@ -927,8 +927,18 @@
       cursor: text;
     }
 
+    .attr-quote {
+      color: var(--text);
+    }
+
+    .attr-value-direct {
+      border: 1px solid transparent;
+      max-width: 220px;
+    }
+
     .attr-name:hover,
-    .attr-value-display:hover {
+    .attr-value-display:hover,
+    .attr-value-direct:hover {
       border-color: var(--input-border);
       background: var(--input-bg);
     }

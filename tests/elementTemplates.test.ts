@@ -6,7 +6,10 @@ import {
   insertSvgElementFromTemplate,
 } from "../src/elementTemplates";
 import { optimizer } from "../src/optimizer";
-import { getPrecisionStep } from "../src/treeView";
+import {
+  getPrecisionStep,
+  incrementNumericAttributeValue,
+} from "../src/treeView";
 
 function parseSvg(input: string): Document {
   return new DOMParser().parseFromString(input, "image/svg+xml");
@@ -92,6 +95,34 @@ describe("SVG element templates", () => {
     try {
       optimizer.options.precision = 0;
       expect(getPrecisionStep()).toBe(1);
+      expect(getPrecisionStep("stroke-width", "0.3")).toBe(0.1);
+      expect(getPrecisionStep("stroke-width", "0.6")).toBe(1);
+      expect(getPrecisionStep("opacity", "0.3")).toBe(0.1);
+    } finally {
+      optimizer.options.precision = previousPrecision;
+    }
+  });
+
+  it("increments numeric tree attribute values with the active precision", () => {
+    const previousPrecision = optimizer.options.precision;
+    try {
+      optimizer.options.precision = 1;
+      expect(incrementNumericAttributeValue("42", 1)).toBe("42.1");
+      expect(incrementNumericAttributeValue("42.1px", -1)).toBe("42px");
+
+      optimizer.options.precision = 2;
+      expect(incrementNumericAttributeValue("42", 1)).toBe("42.01");
+
+      optimizer.options.precision = 0;
+      expect(incrementNumericAttributeValue("42", 1)).toBe("43");
+      expect(incrementNumericAttributeValue("42px", -1)).toBe("41px");
+      expect(incrementNumericAttributeValue("0.3", -1, "stroke-width")).toBe(
+        ".2",
+      );
+      expect(incrementNumericAttributeValue("0.3", 1, "stroke-width")).toBe(
+        ".4",
+      );
+      expect(incrementNumericAttributeValue("0.3", -1, "opacity")).toBe(".2");
     } finally {
       optimizer.options.precision = previousPrecision;
     }

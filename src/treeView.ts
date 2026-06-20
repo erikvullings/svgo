@@ -7,12 +7,23 @@ import {
   type ElementPlacement,
   insertSvgElementFromTemplate,
 } from "./elementTemplates";
-import { hasRoundableAttrs, roundAttrsRecursive } from "./svgUtils";
+import {
+  formatNumberCompact,
+  hasRoundableAttrs,
+  NUMERIC_ATTRS,
+  OPACITY_ATTRS,
+  roundAttrsRecursive,
+} from "./svgUtils";
 import { getElementByPath, getElementInSvgByPath } from "./treeUtils";
 
 type UncontrolledInputAttrs = {
   value: string;
   onChange: (nextValue: string) => void;
+  className?: string;
+  onDoubleClick?: (e: MouseEvent) => void;
+  onFocus?: (e: FocusEvent) => void;
+  onInput?: (nextValue: string) => void;
+  onKeyDown?: (e: KeyboardEvent, input: HTMLInputElement) => void;
   type?: string;
 };
 
@@ -620,29 +631,152 @@ function applyEditingValueLive(saveHistory = true): void {
   }
 }
 
-export function getPrecisionStep(): number {
+function selectElement(path: string): void {
+  optimizer.options.selectedElementPath = path;
+  highlightElement(path);
+}
+
+function shouldUseFractionalStep(
+  attrName?: string,
+  value?: string | null,
+): boolean {
+  if (optimizer.options.precision !== 0 || !attrName) return false;
+
+  const normalizedAttr = attrName.toLowerCase();
+  if (OPACITY_ATTRS.has(normalizedAttr)) return true;
+
+  const num = Number.parseFloat(value ?? "");
+  return (
+    normalizedAttr === "stroke-width" &&
+    Number.isFinite(num) &&
+    Math.abs(num) < 0.5
+  );
+}
+
+export function getPrecisionStep(
+  attrName?: string,
+  value?: string | null,
+): number {
+  if (shouldUseFractionalStep(attrName, value)) return 0.1;
+
   const precision = optimizer.options.precision;
   return precision === 0 ? 1 : Math.pow(10, -precision);
 }
 
-function formatIncrementedNumber(value: number): string {
+export function incrementNumericAttributeValue(
+  value: string,
+  direction: 1 | -1,
+  attrName?: string,
+): string | null {
+  const match = value.trim().match(/^(-?(?:\d+\.?\d*|\.\d+))(.*)$/);
+  if (!match) return null;
+
+  const step = getPrecisionStep(attrName, value);
+  const nextValue = Number.parseFloat(match[1]) + direction * step;
+  return `${formatIncrementedNumber(nextValue, step)}${match[2] ?? ""}`;
+}
+
+function getStepDecimals(step: number): number {
+  if (step >= 1) return 0;
+  return Math.max(0, Math.ceil(-Math.log10(step)));
+}
+
+function formatIncrementedNumber(value: number, step: number): string {
   const precision = optimizer.options.precision;
-  const decimals = Math.max(0, precision);
-  return value
-    .toFixed(decimals)
-    .replace(/\.0+$/, "")
-    .replace(/(\.\d*?)0+$/, "$1");
+  const decimals = Math.max(0, precision, getStepDecimals(step));
+  return formatNumberCompact(Number.parseFloat(value.toFixed(decimals)));
 }
 
 function incrementEditingValue(direction: 1 | -1): boolean {
-  const match = editingState.valueInput.trim().match(/^(-?(?:\d+\.?\d*|\.\d+))(.*)$/);
-  if (!match) return false;
+  const nextValue = incrementNumericAttributeValue(
+    editingState.valueInput,
+    direction,
+    editingState.nameInput,
+  );
+  if (nextValue === null) return false;
 
-  const nextValue = Number.parseFloat(match[1]) + direction * getPrecisionStep();
-  editingState.valueInput = `${formatIncrementedNumber(nextValue)}${match[2] ?? ""}`;
+  editingState.valueInput = nextValue;
   applyEditingValueLive(true);
   focusEditingInput("value");
   return true;
+}
+
+function incrementAttributeValue(
+  path: string,
+  element: Element,
+  attrName: string,
+  direction: 1 | -1,
+): boolean {
+  const currentValue = element.getAttribute(attrName);
+  if (currentValue === null) return false;
+
+  const nextValue = incrementNumericAttributeValue(
+    currentValue,
+    direction,
+    attrName,
+  );
+  if (nextValue === null) return false;
+
+  selectElement(path);
+  element.setAttribute(attrName, nextValue);
+  updateFromTree(element.ownerDocument);
+  return true;
+}
+
+function isDirectEditableNumericAttribute(attrName: string): boolean {
+  return NUMERIC_ATTRS.has(attrName.toLowerCase());
+}
+
+function updateAttributeValueLive(
+  path: string,
+  element: Element,
+  attrName: string,
+  nextValue: string,
+): void {
+  selectElement(path);
+  element.setAttribute(attrName, nextValue);
+  updateFromTree(element.ownerDocument);
+}
+
+function renderDirectAttributeValue(
+  path: string,
+  element: Element,
+  attr: Attr,
+): m.Children {
+  return m(".attr-value-container", [
+    m("span.attr-quote", '"'),
+    m(UncontrolledInput, {
+      className: "attr-value-direct",
+      value: attr.value,
+      onFocus: () => selectElement(path),
+      onDoubleClick: (e: MouseEvent) => {
+        e.stopPropagation();
+        startAttributeEditing(path, element, attr.name, "value");
+      },
+      onInput: (nextValue: string) => {
+        updateAttributeValueLive(path, element, attr.name, nextValue);
+      },
+      onKeyDown: (e: KeyboardEvent, input: HTMLInputElement) => {
+        if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+
+        const nextValue = incrementNumericAttributeValue(
+          input.value,
+          e.key === "ArrowUp" ? 1 : -1,
+          attr.name,
+        );
+        if (nextValue === null) return;
+
+        e.preventDefault();
+        input.value = nextValue;
+        input.size = Math.max(1, Math.min(20, input.value.length));
+        updateAttributeValueLive(path, element, attr.name, nextValue);
+      },
+      onChange: (nextValue: string) => {
+        updateAttributeValueLive(path, element, attr.name, nextValue);
+      },
+    }),
+    m("span.attr-quote", '"'),
+  ]);
 }
 
 function renderInlineSuggestions(): m.Children {
@@ -810,6 +944,9 @@ const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
         const currentAttrs = input._uncontrolledAttrs;
         if (!currentAttrs) return;
 
+        currentAttrs.onKeyDown?.(e, input);
+        if (e.defaultPrevented) return;
+
         if (e.key === "Escape") {
           input.value = currentAttrs.value;
           input.blur();
@@ -822,6 +959,7 @@ const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
       input.addEventListener("input", (e: Event) => {
         const target = e.target as HTMLInputElement;
         target.size = Math.max(1, Math.min(20, target.value.length));
+        input._uncontrolledAttrs?.onInput?.(target.value);
       });
 
       input.addEventListener("change", () => {
@@ -844,8 +982,12 @@ const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
       input.size = Math.max(1, Math.min(20, input.value.length));
     }
   },
-  view() {
-    return m("input.attr-value");
+  view({ attrs }: Vnode<UncontrolledInputAttrs>) {
+    return m("input.attr-value", {
+      class: attrs.className,
+      ondblclick: attrs.onDoubleClick,
+      onfocus: attrs.onFocus,
+    });
   },
 };
 
@@ -933,8 +1075,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
           },
           onclick: (e: MouseEvent) => {
             e.stopPropagation();
-            optimizer.options.selectedElementPath = path;
-            highlightElement(path);
+            selectElement(path);
             m.redraw();
           },
         },
@@ -957,25 +1098,57 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
                             e.stopPropagation();
                             startAttributeEditing(path, node, attr.name, "name");
                           },
-                          onclick: (e: MouseEvent) => e.stopPropagation(),
+                          onclick: (e: MouseEvent) => {
+                            e.stopPropagation();
+                            selectElement(path);
+                          },
                           title: "Double-click to rename",
                         },
                         attr.name,
                       ),
                       m("span.attr-separator", "="),
-                      m(
-                        "button.attr-value-display",
-                        {
-                          type: "button",
-                          ondblclick: (e: MouseEvent) => {
-                            e.stopPropagation();
-                            startAttributeEditing(path, node, attr.name, "value");
-                          },
-                          onclick: (e: MouseEvent) => e.stopPropagation(),
-                          title: "Double-click to edit",
-                        },
-                        `"${attr.value}"`,
-                      ),
+                      isDirectEditableNumericAttribute(attr.name)
+                        ? renderDirectAttributeValue(path, node, attr)
+                        : m(
+                            "button.attr-value-display",
+                            {
+                              type: "button",
+                              ondblclick: (e: MouseEvent) => {
+                                e.stopPropagation();
+                                startAttributeEditing(
+                                  path,
+                                  node,
+                                  attr.name,
+                                  "value",
+                                );
+                              },
+                              onclick: (e: MouseEvent) => {
+                                e.stopPropagation();
+                                selectElement(path);
+                              },
+                              onkeydown: (e: KeyboardEvent) => {
+                                if (
+                                  e.key !== "ArrowUp" &&
+                                  e.key !== "ArrowDown"
+                                ) {
+                                  return;
+                                }
+                                if (
+                                  incrementAttributeValue(
+                                    path,
+                                    node,
+                                    attr.name,
+                                    e.key === "ArrowUp" ? 1 : -1,
+                                  )
+                                ) {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                }
+                              },
+                              title: "Double-click to edit",
+                            },
+                            `"${attr.value}"`,
+                          ),
                       attr.value.length > 50 && m(".attr-value-full", attr.value),
                       m(
                         "button.attr-remove",
@@ -1365,7 +1538,9 @@ function renderPropertiesInspector(
         m(".property-row", [
           m("label", attrName),
           m("input[type=number]", {
-            step: String(getPrecisionStep()),
+            step: String(
+              getPrecisionStep(attrName, element.getAttribute(attrName)),
+            ),
             value: element.getAttribute(attrName) ?? "",
             onchange: (e: Event) => {
               updateElementAttribute(
