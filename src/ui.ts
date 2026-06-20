@@ -35,7 +35,10 @@ function setStoredValue(key: string, value: string): void {
 }
 
 function clampSplitterPercent(percent: number): number {
-  return Math.max(SPLITTER_MIN_PERCENT, Math.min(SPLITTER_MAX_PERCENT, percent));
+  return Math.max(
+    SPLITTER_MIN_PERCENT,
+    Math.min(SPLITTER_MAX_PERCENT, percent),
+  );
 }
 
 function readTheme(): "dark" | "light" | "auto" {
@@ -357,7 +360,8 @@ export const App: m.Component = {
                 if (!splitter || !left || !right) return;
                 const container = splitter.parentElement as HTMLElement | null;
                 const initialBounds = container?.getBoundingClientRect();
-                const initialTotal = initialBounds?.height ?? window.innerHeight;
+                const initialTotal =
+                  initialBounds?.height ?? window.innerHeight;
                 applySplitterLayout(left, right, splitterPercent, initialTotal);
 
                 splitter.onmousedown = function (e) {
@@ -366,13 +370,18 @@ export const App: m.Component = {
                     const bounds = container?.getBoundingClientRect();
                     const total = bounds?.height ?? window.innerHeight;
                     const offset = event.clientY - (bounds?.top ?? 0);
-                    splitterPercent = clampSplitterPercent((offset / total) * 100);
+                    splitterPercent = clampSplitterPercent(
+                      (offset / total) * 100,
+                    );
                     applySplitterLayout(left, right, splitterPercent, total);
                   };
                   document.onmouseup = function () {
                     document.onmousemove = null;
                     document.onmouseup = null;
-                    setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
+                    setStoredValue(
+                      STORAGE_SPLITTER_KEY,
+                      String(splitterPercent),
+                    );
                   };
                 };
               },

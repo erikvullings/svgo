@@ -31,12 +31,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
     }
   },
   view({ attrs }) {
-    const {
-      previewSvg,
-      onZoomIn,
-      onZoomOut,
-      onResetZoom,
-    } = attrs;
+    const { previewSvg, onZoomIn, onZoomOut, onResetZoom } = attrs;
 
     return m(".preview-panel#right-panel", [
       m(".panel-header", [

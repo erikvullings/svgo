@@ -63,10 +63,6 @@ export const Header: m.Component<HeaderAttrs> = {
 function iconMenu(): m.Vnode {
   return m(
     "svg.icon[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2]",
-    [
-      m("path[d=M3 6h18]"),
-      m("path[d=M3 12h18]"),
-      m("path[d=M3 18h18]"),
-    ],
+    [m("path[d=M3 6h18]"), m("path[d=M3 12h18]"), m("path[d=M3 18h18]")],
   );
 }

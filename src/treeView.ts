@@ -252,7 +252,11 @@ function getRowDropPlacement(
 
   if (offsetY < topZone) return "before";
   if (offsetY > bottomZone) return "after";
-  return canInsertChild ? "inside" : offsetY < rect.height / 2 ? "before" : "after";
+  return canInsertChild
+    ? "inside"
+    : offsetY < rect.height / 2
+      ? "before"
+      : "after";
 }
 
 function isPathInside(sourcePath: string, targetPath: string) {
@@ -316,7 +320,12 @@ function insertElementAtPath(
 ) {
   const doc = optimizer.options.treeDoc;
   const target = getElementByPath(doc, path);
-  const inserted = insertSvgElementFromTemplate(doc, target, tagName, placement);
+  const inserted = insertSvgElementFromTemplate(
+    doc,
+    target,
+    tagName,
+    placement,
+  );
   if (!target || !inserted) {
     closeElementMenu();
     m.redraw();
@@ -405,7 +414,9 @@ function startAttributeEditing(
   editingState.field = field;
   editingState.isNew = attrName === null;
   editingState.nameInput = attrName ?? "";
-  editingState.valueInput = attrName ? (element.getAttribute(attrName) ?? "") : "";
+  editingState.valueInput = attrName
+    ? (element.getAttribute(attrName) ?? "")
+    : "";
   editingState.originalValue = editingState.valueInput;
   editingState.suggestions = getAttributeSuggestionsForElement(element);
   updateInlineSuggestionState();
@@ -516,7 +527,10 @@ function updateInlineSuggestionState(preferredSuggestion?: string): void {
 
 function syncInlineValueFromExistingAttribute(): void {
   const doc = optimizer.options.treeDoc;
-  const element = getElementByPath(doc as Document, editingState.path as string);
+  const element = getElementByPath(
+    doc as Document,
+    editingState.path as string,
+  );
   if (!element) return;
 
   const existingValue = element.getAttribute(editingState.nameInput.trim());
@@ -793,7 +807,8 @@ function renderInlineSuggestions(): m.Children {
       m(
         "button.attr-suggestion-item",
         {
-          class: index === editingState.selectedSuggestionIndex ? "selected" : "",
+          class:
+            index === editingState.selectedSuggestionIndex ? "selected" : "",
           type: "button",
           onmouseenter: () => {
             editingState.selectedSuggestionIndex = index;
@@ -882,7 +897,10 @@ function handleValueInputKeydown(e: KeyboardEvent): void {
   }
 }
 
-function renderAttributeEditor(path: string, attrName: string | null): m.Children {
+function renderAttributeEditor(
+  path: string,
+  attrName: string | null,
+): m.Children {
   const isNameActive = editingState.field === "name";
   const nameId = inputId(path, attrName, "name");
   const valueId = inputId(path, attrName, "value");
@@ -898,13 +916,15 @@ function renderAttributeEditor(path: string, attrName: string | null): m.Childre
         },
         oninput: (e: Event) => {
           editingState.nameInput = (e.target as HTMLInputElement).value;
-          editingState.showSuggestionList = editingState.nameInput.trim() !== "";
+          editingState.showSuggestionList =
+            editingState.nameInput.trim() !== "";
           updateInlineSuggestionState();
           syncInlineValueFromExistingAttribute();
         },
         onfocus: () => {
           editingState.field = "name";
-          editingState.showSuggestionList = editingState.nameInput.trim() !== "";
+          editingState.showSuggestionList =
+            editingState.nameInput.trim() !== "";
         },
         onkeydown: handleNameInputKeydown,
         onclick: (e: MouseEvent) => e.stopPropagation(),
@@ -1087,105 +1107,102 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
         [
           m("span.tree-prefix", currentPrefix + ornament),
           m("span.tag-name", node.tagName),
-          m(
-            ".attributes",
-            [
-              ...Array.from(node.attributes).map((attr) =>
-                editingState.path === path &&
-                editingState.originalAttrName === attr.name
-                  ? renderAttributeEditor(path, attr.name)
-                  : m(".attribute", [
-                      m(
-                        "button.attr-name",
-                        {
-                          type: "button",
-                          ondblclick: (e: MouseEvent) => {
-                            e.stopPropagation();
-                            startAttributeEditing(path, node, attr.name, "name");
-                          },
-                          onclick: (e: MouseEvent) => {
-                            e.stopPropagation();
-                            selectElement(path);
-                          },
-                          title: "Double-click to rename",
+          m(".attributes", [
+            ...Array.from(node.attributes).map((attr) =>
+              editingState.path === path &&
+              editingState.originalAttrName === attr.name
+                ? renderAttributeEditor(path, attr.name)
+                : m(".attribute", [
+                    m(
+                      "button.attr-name",
+                      {
+                        type: "button",
+                        ondblclick: (e: MouseEvent) => {
+                          e.stopPropagation();
+                          startAttributeEditing(path, node, attr.name, "name");
                         },
-                        attr.name,
-                      ),
-                      m("span.attr-separator", "="),
-                      isDirectEditableNumericAttribute(attr.name)
-                        ? renderDirectAttributeValue(path, node, attr)
-                        : m(
-                            "button.attr-value-display",
-                            {
-                              type: "button",
-                              ondblclick: (e: MouseEvent) => {
-                                e.stopPropagation();
-                                startAttributeEditing(
+                        onclick: (e: MouseEvent) => {
+                          e.stopPropagation();
+                          selectElement(path);
+                        },
+                        title: "Double-click to rename",
+                      },
+                      attr.name,
+                    ),
+                    m("span.attr-separator", "="),
+                    isDirectEditableNumericAttribute(attr.name)
+                      ? renderDirectAttributeValue(path, node, attr)
+                      : m(
+                          "button.attr-value-display",
+                          {
+                            type: "button",
+                            ondblclick: (e: MouseEvent) => {
+                              e.stopPropagation();
+                              startAttributeEditing(
+                                path,
+                                node,
+                                attr.name,
+                                "value",
+                              );
+                            },
+                            onclick: (e: MouseEvent) => {
+                              e.stopPropagation();
+                              selectElement(path);
+                            },
+                            onkeydown: (e: KeyboardEvent) => {
+                              if (
+                                e.key !== "ArrowUp" &&
+                                e.key !== "ArrowDown"
+                              ) {
+                                return;
+                              }
+                              if (
+                                incrementAttributeValue(
                                   path,
                                   node,
                                   attr.name,
-                                  "value",
-                                );
-                              },
-                              onclick: (e: MouseEvent) => {
+                                  e.key === "ArrowUp" ? 1 : -1,
+                                )
+                              ) {
+                                e.preventDefault();
                                 e.stopPropagation();
-                                selectElement(path);
-                              },
-                              onkeydown: (e: KeyboardEvent) => {
-                                if (
-                                  e.key !== "ArrowUp" &&
-                                  e.key !== "ArrowDown"
-                                ) {
-                                  return;
-                                }
-                                if (
-                                  incrementAttributeValue(
-                                    path,
-                                    node,
-                                    attr.name,
-                                    e.key === "ArrowUp" ? 1 : -1,
-                                  )
-                                ) {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                }
-                              },
-                              title: "Double-click to edit",
+                              }
                             },
-                            `"${attr.value}"`,
-                          ),
-                      attr.value.length > 50 && m(".attr-value-full", attr.value),
-                      m(
-                        "button.attr-remove",
-                        {
-                          title: `Remove ${attr.name}`,
-                          onclick: (e) => {
-                            e.stopPropagation();
-                            node.removeAttribute(attr.name);
-                            updateFromTree(node.ownerDocument);
+                            title: "Double-click to edit",
                           },
+                          `"${attr.value}"`,
+                        ),
+                    attr.value.length > 50 && m(".attr-value-full", attr.value),
+                    m(
+                      "button.attr-remove",
+                      {
+                        title: `Remove ${attr.name}`,
+                        onclick: (e) => {
+                          e.stopPropagation();
+                          node.removeAttribute(attr.name);
+                          updateFromTree(node.ownerDocument);
                         },
-                        "×",
-                      ),
-                    ]),
-              ),
-              editingState.path === path &&
-              editingState.isNew &&
-              editingState.originalAttrName === null
-                ? renderAttributeEditor(path, null)
-                : m(
-                    "button.attribute.attr-add-placeholder",
-                    {
-                      type: "button",
-                      onclick: (e: MouseEvent) => {
-                        e.stopPropagation();
-                        startAttributeEditing(path, node, null, "name");
                       },
+                      "×",
+                    ),
+                  ]),
+            ),
+            editingState.path === path &&
+            editingState.isNew &&
+            editingState.originalAttrName === null
+              ? renderAttributeEditor(path, null)
+              : m(
+                  "button.attribute.attr-add-placeholder",
+                  {
+                    type: "button",
+                    onclick: (e: MouseEvent) => {
+                      e.stopPropagation();
+                      startAttributeEditing(path, node, null, "name");
                     },
-                    "+ Add Attribute",
-                  ),
-            ],
-          ),
+                  },
+                  "+ Add Attribute",
+                ),
+          ]),
           m(".node-controls", [
             canInsertChild &&
               m(
@@ -1383,7 +1400,8 @@ function updateElementAttribute(
 }
 
 function getInspectorNumericAttrs(element: Element): string[] {
-  const byTag = ATTRIBUTE_SUGGESTIONS_BY_TAG[element.tagName.toLowerCase()] || [];
+  const byTag =
+    ATTRIBUTE_SUGGESTIONS_BY_TAG[element.tagName.toLowerCase()] || [];
   const numeric = [
     "x",
     "y",
@@ -1426,7 +1444,9 @@ function renderPropertiesInspector(
   fallbackSvg: Element,
 ): m.Children {
   const element = selectedElement ?? fallbackSvg;
-  const path = selectedElement ? (optimizer.options.selectedElementPath ?? "0") : "0";
+  const path = selectedElement
+    ? (optimizer.options.selectedElementPath ?? "0")
+    : "0";
   const visibility = element.getAttribute("display") !== "none";
   const opacity = element.getAttribute("opacity") ?? "1";
   const canInsertChild = canContainSvgElements(element);
