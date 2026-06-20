@@ -255,6 +255,7 @@ export const App: m.Component = {
     const isCopied = optimizer.copyStatus === "copied";
     const sourceSvg = optimizer.getSourceSvg();
     const previewSvg = optimizer.getPreviewSvg();
+    const hasSource = Boolean(sourceSvg && sourceSvg.trim());
 
     const headerStats = {
       originalSizeLabel: optimizer.formatBytes(stats.originalSize),
@@ -321,6 +322,8 @@ export const App: m.Component = {
               m("div#dragbar.dragbar"),
               m(PreviewPanel, {
                 previewSvg,
+                canOptimize: hasSource,
+                onOptimize: () => optimizer.loadOptimizedFile(),
                 onZoomIn: () => zoomSvg(1.2),
                 onZoomOut: () => zoomSvg(0.8),
                 onResetZoom: () => resetZoom(),

@@ -15,7 +15,7 @@ type OptimizeOptions = {
   pathPrecision: number;
   removeTspan: boolean;
   removeStyling: boolean;
-  removeGroups: boolean;
+  autoAutocrop: boolean;
   customWidth: number;
   customHeight: number;
   useCustomDimensions: boolean;
@@ -24,7 +24,6 @@ type OptimizeOptions = {
   removeFontSize: boolean;
   convertSodipodiArcs: boolean;
   groupSimilarElements: boolean;
-  groupingMode: "group" | "remove" | "none";
   viewMode: "code" | "tree";
   selectedElementPath: string | null;
   treeDoc: Document | null;
@@ -74,7 +73,7 @@ class SVGOptimizer {
       pathPrecision: 2,
       removeTspan: true,
       removeStyling: true,
-      removeGroups: false,
+      autoAutocrop: false,
       customWidth: 100,
       customHeight: 100,
       useCustomDimensions: false,
@@ -83,7 +82,6 @@ class SVGOptimizer {
       removeFontSize: false,
       convertSodipodiArcs: true,
       groupSimilarElements: true,
-      groupingMode: "group", // 'group', 'remove', or 'none'
       viewMode: "code", // 'code', 'tree'
       selectedElementPath: null, // JSON path or similar to track selected element
       treeDoc: null, // Parsed DOM for the Tree View
@@ -124,8 +122,9 @@ class SVGOptimizer {
       this.options.removeTspan ||
       this.options.removeStyling ||
       this.options.convertSodipodiArcs ||
+      this.options.autoAutocrop ||
       this.options.useCustomDimensions;
-    const hasGrouping = this.options.groupingMode !== "none";
+    const hasGrouping = this.options.groupSimilarElements;
     return hasRounding || hasToggles || hasGrouping;
   }
 
@@ -385,6 +384,22 @@ class SVGOptimizer {
     if (!sourceSvg || !sourceSvg.trim()) return;
     const croppedSvg = this.autocropSvg(sourceSvg, 3);
     this.originalSvg = croppedSvg;
+    if (this.editor) {
+      this.options.isUpdatingFromTree = true;
+      this.editor.setValue(this.originalSvg);
+      this.options.isUpdatingFromTree = false;
+    }
+    this.updateTreeDoc();
+    this.optimizeSvg();
+    this.saveToHistory();
+    m.redraw();
+  }
+
+  removeGroupsCurrentSvg(): void {
+    const sourceSvg = this.getSourceSvg();
+    if (!sourceSvg || !sourceSvg.trim()) return;
+    const ungroupedSvg = this.removeGroups(sourceSvg);
+    this.originalSvg = this.normalizeNamespaces(ungroupedSvg);
     if (this.editor) {
       this.options.isUpdatingFromTree = true;
       this.editor.setValue(this.originalSvg);
@@ -2051,10 +2066,7 @@ class SVGOptimizer {
         svg = this.removeStyling(svg);
       }
 
-      // Handle grouping based on mode
-      if (this.options.groupingMode === "remove") {
-        svg = this.removeGroups(svg);
-      } else if (this.options.groupingMode === "group") {
+      if (this.options.groupSimilarElements) {
         // Group similar elements only (disable aggressive path combining for now)
         svg = this.groupSimilarElementsByType(svg);
         // Note: combinePaths disabled as it's too aggressive
@@ -2078,6 +2090,10 @@ class SVGOptimizer {
 
       // Remove default root attributes like version="1.1"
       svg = this.removeSvgRootDefaults(svg);
+
+      if (this.options.autoAutocrop) {
+        svg = this.autocropSvg(svg, 3);
+      }
 
       if (this.options.useCustomDimensions) {
         svg = this.resizeSvg(

@@ -51,10 +51,7 @@ export const Sidebar: m.Component<SidebarAttrs> = {
               ? m(
                   "label.action-button.file-button",
                   { for: "file-input", title: "Open SVG file" },
-                  [
-                    iconFolder(),
-                    m("span", "Open"),
-                  ],
+                  [iconFolder(), m("span", "Open")],
                 )
               : null,
             showDownload
@@ -85,6 +82,15 @@ export const Sidebar: m.Component<SidebarAttrs> = {
                 onclick: () => optimizer.autocropCurrentSvg(),
               },
               [iconCrop(), m("span", "Autocrop")],
+            ),
+            m(
+              "button.action-button",
+              {
+                title: "Remove all groups",
+                disabled: hasSource ? undefined : "disabled",
+                onclick: () => optimizer.removeGroupsCurrentSvg(),
+              },
+              [iconUngroup(), m("span", "Remove groups")],
             ),
             m(
               "button.action-button",
@@ -122,7 +128,11 @@ export const Sidebar: m.Component<SidebarAttrs> = {
               iconTheme(),
               m(
                 "span",
-                theme === "dark" ? "Light" : theme === "light" ? "Auto" : "Dark",
+                theme === "dark"
+                  ? "Light"
+                  : theme === "light"
+                    ? "Auto"
+                    : "Dark",
               ),
             ],
           ),
@@ -173,13 +183,22 @@ function iconCrop(): m.Vnode {
   );
 }
 
-function iconUndo(): m.Vnode {
+function iconUngroup(): m.Vnode {
   return m(
     "svg.icon[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=1.8]",
     [
-      m("path[d=M9 7H4v5]"),
-      m("path[d=M4 12c1.6-3.5 5-6 9-6a9 9 0 0 1 9 9]"),
+      m("rect[x=3][y=6][width=7][height=6][rx=1]"),
+      m("rect[x=14][y=12][width=7][height=6][rx=1]"),
+      m("path[d=M11 9h2]"),
+      m("path[d=M12 10v2]")
     ],
+  );
+}
+
+function iconUndo(): m.Vnode {
+  return m(
+    "svg.icon[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=1.8]",
+    [m("path[d=M9 7H4v5]"), m("path[d=M4 12c1.6-3.5 5-6 9-6a9 9 0 0 1 9 9]")],
   );
 }
 

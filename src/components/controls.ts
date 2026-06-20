@@ -130,67 +130,31 @@ export const Controls: m.Component<ControlsAttrs> = {
           }),
           m("label", { for: "remove-styling" }, "Remove styling"),
         ]),
-      ]),
-      m(".option-section", [
-        m(".section-title", "Grouping"),
-        m(".checkbox-group.grouping", [
-          // m("label", { class: "grouping-label" }, "Grouping:"),
-          m("input[type=radio]", {
-            id: "grouping-none",
-            name: "grouping-mode",
-            value: "none",
-            checked: optimizer.options.groupingMode === "none",
+        m(".checkbox-group", [
+          m("input[type=checkbox]", {
+            id: "group-similar-elements",
+            checked: optimizer.options.groupSimilarElements,
             onchange: (e: Event) => {
-              if ((e.target as HTMLInputElement).checked) {
-                optimizer.options.groupingMode = "none";
-                optimizer.options.removeGroups = false;
-                optimizer.options.groupSimilarElements = false;
-                optimizer.optimizeSvg();
-                optimizer.saveToHistory();
-              }
+              optimizer.options.groupSimilarElements = (
+                e.target as HTMLInputElement
+              ).checked;
+              optimizer.optimizeSvg();
+              optimizer.saveToHistory();
             },
           }),
-          m(
-            "label",
-            { for: "grouping-none", class: "grouping-option" },
-            "None",
-          ),
-          m("input[type=radio]", {
-            id: "grouping-group",
-            name: "grouping-mode",
-            value: "group",
-            checked: optimizer.options.groupingMode === "group",
+          m("label", { for: "group-similar-elements" }, "Group similar elements"),
+        ]),
+        m(".checkbox-group", [
+          m("input[type=checkbox]", {
+            id: "auto-autocrop",
+            checked: optimizer.options.autoAutocrop,
             onchange: (e: Event) => {
-              if ((e.target as HTMLInputElement).checked) {
-                optimizer.options.groupingMode = "group";
-                optimizer.options.removeGroups = false;
-                optimizer.options.groupSimilarElements = true;
-                optimizer.optimizeSvg();
-                optimizer.saveToHistory();
-              }
+              optimizer.options.autoAutocrop = (e.target as HTMLInputElement).checked;
+              optimizer.optimizeSvg();
+              optimizer.saveToHistory();
             },
           }),
-          m(
-            "label",
-            { for: "grouping-group", class: "grouping-option" },
-            "Group similar",
-          ),
-          m("input[type=radio]", {
-            id: "grouping-remove",
-            name: "grouping-mode",
-            value: "remove",
-            checked: optimizer.options.groupingMode === "remove",
-            onchange: (e: Event) => {
-              if ((e.target as HTMLInputElement).checked) {
-                optimizer.options.groupingMode = "remove";
-                optimizer.options.removeGroups = true;
-                optimizer.options.groupSimilarElements = false;
-                optimizer.optimizeSvg();
-                optimizer.saveToHistory();
-              }
-            },
-          }),
-          m("label", { for: "grouping-remove" }, "Remove groups"),
+          m("label", { for: "auto-autocrop" }, "Auto-autocrop viewBox"),
         ]),
       ]),
       m(".option-section", [
