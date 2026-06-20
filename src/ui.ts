@@ -15,9 +15,74 @@ let startY = 0;
 let theme: "dark" | "light" | "auto" =
   (localStorage.getItem("svgo-theme") as "dark" | "light" | "auto") || "dark";
 let sidebarOpen = true;
+let lastCopiedSvgFingerprint: string | null = null;
+let pasteToastMessage = "";
+let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const showFileActions = true;
 const showDownload = true;
+
+function fingerprintSvg(svg: string): string {
+  const normalized = svg.trim().replace(/\s+/g, " ");
+  let hash = 0;
+  for (let i = 0; i < normalized.length; i += 1) {
+    hash = (hash * 31 + normalized.charCodeAt(i)) >>> 0;
+  }
+  return `${normalized.length}:${hash}`;
+}
+
+function extractValidSvgFromText(text: string): string | null {
+  const trimmed = text.trim();
+  if (!trimmed || !/<svg\b/i.test(trimmed)) return null;
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(trimmed, "image/svg+xml");
+  const hasParseError = doc.querySelector("parsererror") !== null;
+  const rootSvg = doc.querySelector("svg");
+  if (hasParseError || !rootSvg) return null;
+
+  return trimmed;
+}
+
+function handleGlobalSvgPaste(event: ClipboardEvent): void {
+  const target = event.target as HTMLElement | null;
+  if (target?.closest && target.closest("#editor")) return;
+  if (["INPUT", "TEXTAREA"].includes(target?.tagName || "")) return;
+
+  const clipboardText = event.clipboardData?.getData("text/plain") || "";
+  const svgText = extractValidSvgFromText(clipboardText);
+  if (!svgText) return;
+
+  const incomingFingerprint = fingerprintSvg(svgText);
+  if (
+    lastCopiedSvgFingerprint &&
+    incomingFingerprint === lastCopiedSvgFingerprint
+  ) {
+    return;
+  }
+
+  event.preventDefault();
+  const shouldReplace = window.confirm(
+    "Detected SVG content in clipboard. Replace the current SVG document?",
+  );
+  if (!shouldReplace) return;
+
+  optimizer.loadSvgString(svgText);
+  showPasteToast("SVG replaced from clipboard. Press Cmd/Ctrl+Z to undo.");
+}
+
+function showPasteToast(message: string): void {
+  pasteToastMessage = message;
+  if (pasteToastTimer) {
+    clearTimeout(pasteToastTimer);
+  }
+  pasteToastTimer = setTimeout(() => {
+    pasteToastMessage = "";
+    pasteToastTimer = null;
+    m.redraw();
+  }, 2800);
+  m.redraw();
+}
 
 function resolveTheme(nextTheme: "dark" | "light" | "auto") {
   if (nextTheme === "auto") {
@@ -38,8 +103,7 @@ function applyTheme(nextTheme: "dark" | "light" | "auto") {
 }
 
 function toggleTheme() {
-  const next =
-    theme === "dark" ? "light" : theme === "light" ? "auto" : "dark";
+  const next = theme === "dark" ? "light" : theme === "light" ? "auto" : "dark";
   applyTheme(next);
 }
 
@@ -121,6 +185,7 @@ function copyToClipboard(): void {
   navigator.clipboard
     .writeText(sourceSvg)
     .then(() => {
+      lastCopiedSvgFingerprint = fingerprintSvg(sourceSvg);
       optimizer.copyStatus = "copied";
       if (optimizer.copyResetTimer) {
         clearTimeout(optimizer.copyResetTimer);
@@ -155,7 +220,9 @@ export const App: m.Component = {
         media.addEventListener("change", handleChange);
       } else {
         const legacyMedia = media as MediaQueryList & {
-          addListener?: (listener: (this: MediaQueryList, ev: MediaQueryListEvent) => void) => void;
+          addListener?: (
+            listener: (this: MediaQueryList, ev: MediaQueryListEvent) => void,
+          ) => void;
         };
         if (typeof legacyMedia.addListener === "function") {
           legacyMedia.addListener(handleChange);
@@ -214,45 +281,57 @@ export const App: m.Component = {
         }),
         m(".app-main", [
           m(Header, { stats: headerStats, onToggleSidebar: toggleSidebar }),
-          m(".main-content", {
-            oncreate: () => {
-              const splitter = document.getElementById("dragbar");
-              const left = document.getElementById("left-panel");
-              const right = document.getElementById("right-panel");
-              if (!splitter || !left || !right) return;
-              splitter.onmousedown = function (e) {
-                e.preventDefault();
-                const container = splitter.parentElement as HTMLElement | null;
-                document.onmousemove = function (event) {
-                  const bounds = container?.getBoundingClientRect();
-                  const total = bounds?.height ?? window.innerHeight;
-                  const offset = event.clientY - (bounds?.top ?? 0);
-                  let percent = (offset / total) * 100;
-                  let percentSplitter = (6 / total) * 100;
-                  percent = Math.max(10, Math.min(90, percent));
-                  left.style.flex = `0 0 ${percent}%`;
-                  right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
+          m(
+            ".main-content",
+            {
+              oncreate: () => {
+                const splitter = document.getElementById("dragbar");
+                const left = document.getElementById("left-panel");
+                const right = document.getElementById("right-panel");
+                if (!splitter || !left || !right) return;
+                splitter.onmousedown = function (e) {
+                  e.preventDefault();
+                  const container =
+                    splitter.parentElement as HTMLElement | null;
+                  document.onmousemove = function (event) {
+                    const bounds = container?.getBoundingClientRect();
+                    const total = bounds?.height ?? window.innerHeight;
+                    const offset = event.clientY - (bounds?.top ?? 0);
+                    let percent = (offset / total) * 100;
+                    let percentSplitter = (6 / total) * 100;
+                    percent = Math.max(10, Math.min(90, percent));
+                    left.style.flex = `0 0 ${percent}%`;
+                    right.style.flex = `0 0 ${100 - percent - percentSplitter}%`;
+                  };
+                  document.onmouseup = function () {
+                    document.onmousemove = null;
+                    document.onmouseup = null;
+                  };
                 };
-                document.onmouseup = function () {
-                  document.onmousemove = null;
-                  document.onmouseup = null;
-                };
-              };
+              },
             },
-          }, [
-            m(".editor-panel#left-panel", [
-              m(EditorPanel, { sourceSvg, isCopied, onCopy: copyToClipboard }),
-            ]),
-            m("div#dragbar.dragbar"),
-            m(PreviewPanel, {
-              previewSvg,
-              onZoomIn: () => zoomSvg(1.2),
-              onZoomOut: () => zoomSvg(0.8),
-              onResetZoom: () => resetZoom(),
-            }),
-          ]),
+            [
+              m(".editor-panel#left-panel", [
+                m(EditorPanel, {
+                  sourceSvg,
+                  isCopied,
+                  onCopy: copyToClipboard,
+                }),
+              ]),
+              m("div#dragbar.dragbar"),
+              m(PreviewPanel, {
+                previewSvg,
+                onZoomIn: () => zoomSvg(1.2),
+                onZoomOut: () => zoomSvg(0.8),
+                onResetZoom: () => resetZoom(),
+              }),
+            ],
+          ),
         ]),
       ]),
+      pasteToastMessage
+        ? m(".app-toast[role=status][aria-live=polite]", pasteToastMessage)
+        : null,
     ];
 
     return m("div", body);
@@ -264,6 +343,7 @@ export function initializeGlobalHandlers() {
   if (globalHandlersInitialized) return;
   globalHandlersInitialized = true;
   setupPanEvents();
+  document.addEventListener("paste", handleGlobalSvgPaste);
 
   if (vscodeApi) {
     window.addEventListener("message", (event) => {
@@ -292,7 +372,11 @@ export function initializeGlobalHandlers() {
       return;
     }
 
-    if (modKey && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+    if (
+      modKey &&
+      (e.key.toLowerCase() === "y" ||
+        (e.shiftKey && e.key.toLowerCase() === "z"))
+    ) {
       e.preventDefault();
       optimizer.redo();
       m.redraw();

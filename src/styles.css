@@ -1338,3 +1338,31 @@ text.highlighted-preview.white-outline {
   stroke-width: 3px !important;
   paint-order: stroke fill !important;
 }
+
+.app-toast {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2500;
+  max-width: min(460px, calc(100vw - 32px));
+  background: color-mix(in srgb, var(--panel) 92%, black);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+  border-radius: 8px;
+  padding: 0.65rem 0.8rem;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+  font-size: 0.85rem;
+  line-height: 1.35;
+  animation: app-toast-in 0.16s ease-out;
+}
+
+@keyframes app-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
