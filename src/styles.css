@@ -284,12 +284,6 @@ button,
   margin-right: 0;
 }
 
-.action-button.primary {
-  background: var(--accent);
-  color: var(--button-text);
-  border-color: var(--accent);
-}
-
 .action-button.file-button {
   background: var(--panel-2);
   color: var(--text);
@@ -515,6 +509,21 @@ button:hover,
   display: flex;
   gap: 0.5rem;
   align-items: center;
+}
+
+.preview-control-btn {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.25rem 0.6rem;
+  height: 28px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .preview-placeholder {

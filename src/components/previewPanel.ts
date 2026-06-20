@@ -38,9 +38,9 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
         m("span", "Optimized SVG"),
         previewSvg &&
           m("div.preview-controls", [
-            m("button", { onclick: onZoomIn }, "+"),
-            m("button", { onclick: onZoomOut }, "-"),
-            m("button", { onclick: onResetZoom }, "Reset"),
+            m("button.preview-control-btn", { onclick: onZoomIn }, "+"),
+            m("button.preview-control-btn", { onclick: onZoomOut }, "−"),
+            m("button.preview-control-btn", { onclick: onResetZoom }, "Reset"),
           ]),
       ]),
       m(".preview-container", [

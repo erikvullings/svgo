@@ -69,7 +69,7 @@ export const Sidebar: m.Component<SidebarAttrs> = {
                 )
               : null,
             m(
-              "button.action-button.primary",
+              "button.action-button",
               {
                 title: "Optimize",
                 disabled: hasSource ? undefined : "disabled",
