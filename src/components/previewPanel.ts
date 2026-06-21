@@ -1,6 +1,8 @@
 import m from "mithril";
 export type PreviewPanelAttrs = {
   previewSvg: string;
+  splitOrientation: "vertical" | "horizontal";
+  onToggleSplitOrientation: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onResetZoom: () => void;
@@ -31,13 +33,31 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
     }
   },
   view({ attrs }) {
-    const { previewSvg, onZoomIn, onZoomOut, onResetZoom } = attrs;
+    const {
+      previewSvg,
+      splitOrientation,
+      onToggleSplitOrientation,
+      onZoomIn,
+      onZoomOut,
+      onResetZoom,
+    } = attrs;
 
     return m(".preview-panel#right-panel", [
       m(".panel-header", [
         m("span", "Optimized SVG"),
         previewSvg &&
           m("div.preview-controls", [
+            m(
+              "button.preview-control-btn",
+              {
+                onclick: onToggleSplitOrientation,
+                title:
+                  splitOrientation === "vertical"
+                    ? "Switch to horizontal split"
+                    : "Switch to vertical split",
+              },
+              "Split",
+            ),
             m("button.preview-control-btn", { onclick: onZoomIn }, "+"),
             m("button.preview-control-btn", { onclick: onZoomOut }, "−"),
             m("button.preview-control-btn", { onclick: onResetZoom }, "Reset"),

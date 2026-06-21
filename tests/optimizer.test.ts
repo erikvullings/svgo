@@ -188,4 +188,28 @@ describe("optimizeSvg", () => {
     expect(markerRefs.every((id) => markerIdSet.has(id))).toBe(true);
     expect(output).not.toContain("parsererror");
   });
+
+  it("preserves marker arrowheads when re-optimizing already-optimized SVG", async () => {
+    const input = readFileSync("tests/examples/measurements.svg", "utf8");
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    await optimizer.optimizeSvg();
+    const firstPass = optimizer.optimizedSvg;
+
+    // Second pass: re-optimize the already-optimized output
+    optimizer.originalSvg = firstPass;
+    await optimizer.optimizeSvg();
+    const secondPass = optimizer.optimizedSvg;
+
+    // All paths that carry marker refs must still be separate (not merged)
+    const markerPaths = Array.from(
+      secondPass.matchAll(/marker-end="url\(#([^"]+)\)"/g),
+    );
+    expect(markerPaths.length).toBeGreaterThan(0);
+
+    // No merged multi-subpath (space-separated M commands) on a marker-bearing path
+    const mergedMarkerPath =
+      /<path\b[^>]*marker-(?:start|end)="[^"]*"[^>]*\bd="[^"]*M[^"]*M/;
+    expect(secondPass).not.toMatch(mergedMarkerPath);
+  });
 });

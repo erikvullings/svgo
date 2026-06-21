@@ -15,8 +15,11 @@ let startY = 0;
 const STORAGE_THEME_KEY = "svgo-theme";
 const STORAGE_SIDEBAR_KEY = "svgo-sidebar-open";
 const STORAGE_SPLITTER_KEY = "svgo-splitter-percent";
+const STORAGE_SPLITTER_ORIENTATION_KEY = "svgo-splitter-orientation";
 const SPLITTER_MIN_PERCENT = 10;
 const SPLITTER_MAX_PERCENT = 90;
+
+type SplitOrientation = "vertical" | "horizontal";
 
 function getStoredValue(key: string): string | null {
   try {
@@ -62,9 +65,18 @@ function readSplitterPercent(): number {
   return clampSplitterPercent(stored);
 }
 
+function readSplitterOrientation(): SplitOrientation {
+  const stored = getStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY);
+  if (stored === "horizontal" || stored === "vertical") {
+    return stored;
+  }
+  return "vertical";
+}
+
 let theme: "dark" | "light" | "auto" = readTheme();
 let sidebarOpen = readSidebarOpen();
 let splitterPercent = readSplitterPercent();
+let splitterOrientation: SplitOrientation = readSplitterOrientation();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -168,12 +180,80 @@ function applySplitterLayout(
   left: HTMLElement,
   right: HTMLElement,
   percent: number,
-  totalHeight: number,
+  totalSize: number,
+  orientation: SplitOrientation,
 ): void {
   const normalizedPercent = clampSplitterPercent(percent);
-  const percentSplitter = (6 / totalHeight) * 100;
+  const safeTotal = Math.max(1, totalSize);
+  const percentSplitter = (6 / safeTotal) * 100;
   left.style.flex = `0 0 ${normalizedPercent}%`;
   right.style.flex = `0 0 ${100 - normalizedPercent - percentSplitter}%`;
+
+  if (orientation === "horizontal") {
+    left.style.minWidth = "0";
+    right.style.minWidth = "0";
+  }
+}
+
+function getSplitterTotalSize(
+  container: HTMLElement | null,
+  orientation: SplitOrientation,
+): number {
+  const bounds = container?.getBoundingClientRect();
+  if (orientation === "horizontal") {
+    return bounds?.width ?? window.innerWidth;
+  }
+  return bounds?.height ?? window.innerHeight;
+}
+
+function setupSplitter(): void {
+  const splitter = document.getElementById("dragbar");
+  const left = document.getElementById("left-panel");
+  const right = document.getElementById("right-panel");
+  if (!splitter || !left || !right) return;
+
+  const container = splitter.parentElement as HTMLElement | null;
+  const initialTotal = getSplitterTotalSize(container, splitterOrientation);
+  applySplitterLayout(
+    left,
+    right,
+    splitterPercent,
+    initialTotal,
+    splitterOrientation,
+  );
+
+  splitter.onmousedown = function (e) {
+    e.preventDefault();
+    document.onmousemove = function (event) {
+      const bounds = container?.getBoundingClientRect();
+      const total = getSplitterTotalSize(container, splitterOrientation);
+      const offset =
+        splitterOrientation === "horizontal"
+          ? event.clientX - (bounds?.left ?? 0)
+          : event.clientY - (bounds?.top ?? 0);
+
+      splitterPercent = clampSplitterPercent((offset / total) * 100);
+      applySplitterLayout(
+        left,
+        right,
+        splitterPercent,
+        total,
+        splitterOrientation,
+      );
+    };
+    document.onmouseup = function () {
+      document.onmousemove = null;
+      document.onmouseup = null;
+      setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
+    };
+  };
+}
+
+function toggleSplitterOrientation(): void {
+  splitterOrientation =
+    splitterOrientation === "vertical" ? "horizontal" : "vertical";
+  setStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY, splitterOrientation);
+  setupSplitter();
 }
 
 function applyTransform(): void {
@@ -355,38 +435,12 @@ export const App: m.Component = {
           m(
             ".main-content",
             {
-              oncreate: () => {
-                const splitter = document.getElementById("dragbar");
-                const left = document.getElementById("left-panel");
-                const right = document.getElementById("right-panel");
-                if (!splitter || !left || !right) return;
-                const container = splitter.parentElement as HTMLElement | null;
-                const initialBounds = container?.getBoundingClientRect();
-                const initialTotal =
-                  initialBounds?.height ?? window.innerHeight;
-                applySplitterLayout(left, right, splitterPercent, initialTotal);
-
-                splitter.onmousedown = function (e) {
-                  e.preventDefault();
-                  document.onmousemove = function (event) {
-                    const bounds = container?.getBoundingClientRect();
-                    const total = bounds?.height ?? window.innerHeight;
-                    const offset = event.clientY - (bounds?.top ?? 0);
-                    splitterPercent = clampSplitterPercent(
-                      (offset / total) * 100,
-                    );
-                    applySplitterLayout(left, right, splitterPercent, total);
-                  };
-                  document.onmouseup = function () {
-                    document.onmousemove = null;
-                    document.onmouseup = null;
-                    setStoredValue(
-                      STORAGE_SPLITTER_KEY,
-                      String(splitterPercent),
-                    );
-                  };
-                };
-              },
+              class:
+                splitterOrientation === "horizontal"
+                  ? "is-horizontal"
+                  : "is-vertical",
+              oncreate: setupSplitter,
+              onupdate: setupSplitter,
             },
             [
               m(".editor-panel#left-panel", [
@@ -397,12 +451,17 @@ export const App: m.Component = {
                 }),
               ]),
               m("div#dragbar.dragbar"),
-              m(PreviewPanel, {
-                previewSvg,
-                onZoomIn: () => zoomSvg(1.2),
-                onZoomOut: () => zoomSvg(0.8),
-                onResetZoom: () => resetZoom(),
-              }),
+              m<import("./components/previewPanel").PreviewPanelAttrs, {}>(
+                PreviewPanel,
+                {
+                  previewSvg,
+                  splitOrientation: splitterOrientation,
+                  onToggleSplitOrientation: toggleSplitterOrientation,
+                  onZoomIn: () => zoomSvg(1.2),
+                  onZoomOut: () => zoomSvg(0.8),
+                  onResetZoom: () => resetZoom(),
+                },
+              ),
             ],
           ),
         ]),

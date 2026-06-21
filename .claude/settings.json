@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx vitest *)",
+      "Bash(git commit -m ' *)",
+      "Bash(pnpm test *)",
+      "Bash(node -e \"const s = require\\('./node_modules/svgo/dist/svgo.browser.js'\\); console.log\\(Object.keys\\(s\\).filter\\(k => k.match\\(/path|style|intersect/i\\)\\)\\)\")"
+    ]
+  }
+}

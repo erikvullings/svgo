@@ -376,6 +376,10 @@ button:hover,
   min-height: 0;
 }
 
+.main-content.is-horizontal {
+  flex-direction: row;
+}
+
 @media (orientation: portrait) {
   .main-content {
     flex-direction: column;
@@ -604,6 +608,18 @@ button:hover,
   align-self: stretch;
 }
 
+.main-content.is-horizontal .dragbar {
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+}
+
+.main-content.is-vertical .dragbar {
+  width: 100%;
+  height: 6px;
+  cursor: row-resize;
+}
+
 #left-panel {
   flex: 0 0 50%;
 }
@@ -616,6 +632,11 @@ button:hover,
 #right-panel {
   overflow: hidden;
   min-height: 0;
+}
+
+.main-content.is-horizontal #left-panel,
+.main-content.is-horizontal #right-panel {
+  min-width: 0;
 }
 
 .tree-view {

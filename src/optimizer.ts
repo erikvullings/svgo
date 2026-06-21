@@ -799,17 +799,40 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  /** Tag paths with marker attributes so SVGO's mergePaths won't combine them. */
+  /** Tag paths with marker attributes (direct or inherited from an ancestor group)
+   *  so SVGO's mergePaths won't combine them. Each path gets a unique counter value
+   *  so mergePaths sees differing attributes and refuses to merge them. */
   tagMarkerPaths(svg: string): string {
-    return svg.replace(
-      /<path\b([^>]*\b(?:marker-start|marker-mid|marker-end)[^>]*?)(\/?)>/g,
-      (_match, attrs, slash) => `<path${attrs} data-no-merge="1"${slash}>`,
-    );
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(svg, "image/svg+xml");
+    const MARKER_ATTRS = ["marker-start", "marker-mid", "marker-end"];
+
+    function hasMarkers(el: Element): boolean {
+      return MARKER_ATTRS.some((attr) => el.hasAttribute(attr));
+    }
+
+    function ancestorHasMarkers(el: Element): boolean {
+      let parent = el.parentElement;
+      while (parent) {
+        if (hasMarkers(parent)) return true;
+        parent = parent.parentElement;
+      }
+      return false;
+    }
+
+    let counter = 0;
+    doc.querySelectorAll("path").forEach((path) => {
+      if (hasMarkers(path) || ancestorHasMarkers(path)) {
+        path.setAttribute("data-no-merge", String(counter++));
+      }
+    });
+
+    return new XMLSerializer().serializeToString(doc);
   }
 
   /** Remove the temporary sentinel added by tagMarkerPaths. */
   untagMarkerPaths(svg: string): string {
-    return svg.replace(/ data-no-merge="1"/g, "");
+    return svg.replace(/ data-no-merge="\d+"/g, "");
   }
 
   mergePathsAndCollapseGroups(svg: string): string {
