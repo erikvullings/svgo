@@ -2274,6 +2274,7 @@ class SVGOptimizer {
       });
 
       svg = svgoResult.data;
+      svg = this.fixInvalidHexColors(svg);
       svg = this.untagMarkerPaths(svg);
       svg = this.normalizeXlinkHrefs(svg);
       svg = this.convertXlinkHrefs(svg);
