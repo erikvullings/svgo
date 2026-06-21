@@ -100,7 +100,9 @@ function handleGlobalSvgPaste(event: ClipboardEvent): void {
   if (["INPUT", "TEXTAREA"].includes(target?.tagName || "")) return;
 
   const clipboardText = event.clipboardData?.getData("text/plain") || "";
-  const svgText = extractValidSvgFromText(clipboardText);
+  const svgText = extractValidSvgFromText(
+    optimizer.fixInvalidHexColors(clipboardText),
+  );
   if (!svgText) return;
 
   const incomingFingerprint = fingerprintSvg(svgText);
