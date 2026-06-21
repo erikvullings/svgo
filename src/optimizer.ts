@@ -550,7 +550,7 @@ class SVGOptimizer {
     }
     this.optimizeSvg();
     if (this.optimizedSvg) {
-      this.originalSvg = this.optimizedSvg;
+      this.originalSvg = this.normalizeNamespaces(this.optimizedSvg);
       if (this.editor) {
         this.options.isUpdatingFromTree = true;
         this.editor.setValue(this.originalSvg);
@@ -2351,6 +2351,7 @@ class SVGOptimizer {
 
       svg = this.restorePreservedAttributes(svg, preservedResult.preserved);
       svg = this.removeDanglingNamespacedAttributes(svg);
+      svg = this.fixInvalidHexColors(svg);
 
       this.optimizedSvg = svg;
     } catch (error) {
