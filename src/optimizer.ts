@@ -799,6 +799,19 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
+  /** Tag paths with marker attributes so SVGO's mergePaths won't combine them. */
+  tagMarkerPaths(svg: string): string {
+    return svg.replace(
+      /<path\b([^>]*\b(?:marker-start|marker-mid|marker-end)[^>]*?)(\/?)>/g,
+      (_match, attrs, slash) => `<path${attrs} data-no-merge="1"${slash}>`,
+    );
+  }
+
+  /** Remove the temporary sentinel added by tagMarkerPaths. */
+  untagMarkerPaths(svg: string): string {
+    return svg.replace(/ data-no-merge="1"/g, "");
+  }
+
   mergePathsAndCollapseGroups(svg: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, "image/svg+xml");
@@ -2214,6 +2227,9 @@ class SVGOptimizer {
         svg = this.convertSodipodiArcs(svg);
       }
 
+      // Protect marker paths from SVGO's mergePaths
+      svg = this.tagMarkerPaths(svg);
+
       // First pass with SVGO
       const svgoResult = optimize(svg, {
         plugins: [
@@ -2258,6 +2274,7 @@ class SVGOptimizer {
       });
 
       svg = svgoResult.data;
+      svg = this.untagMarkerPaths(svg);
       svg = this.normalizeXlinkHrefs(svg);
       svg = this.convertXlinkHrefs(svg);
       svg = this.stripUndeclaredNamespacedContent(svg);
