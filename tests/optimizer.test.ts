@@ -37,6 +37,36 @@ describe("xlink href handling", () => {
   });
 });
 
+describe("fixInvalidHexColors", () => {
+  it("collapses out-of-range hex digits to f on import", () => {
+    const optimizer = new SVGOptimizer();
+    expect(optimizer.fixInvalidHexColors('<path fill="#pf5ccc"/>')).toBe(
+      '<path fill="#ff5ccc"/>',
+    );
+  });
+
+  it("preserves casing when clamping", () => {
+    const optimizer = new SVGOptimizer();
+    expect(optimizer.fixInvalidHexColors('<stop stop-color="#G0Z"/>')).toBe(
+      '<stop stop-color="#F0F"/>',
+    );
+  });
+
+  it("fixes colours inside style attributes and css", () => {
+    const optimizer = new SVGOptimizer();
+    expect(
+      optimizer.fixInvalidHexColors('<rect style="fill:#pf5ccc;stroke:#0g0"/>'),
+    ).toBe('<rect style="fill:#ff5ccc;stroke:#0f0"/>');
+  });
+
+  it("leaves id references and valid colours untouched", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<path fill="#0297ff" marker-end="url(#p)" clip-path="url(#gradient)"/>';
+    expect(optimizer.fixInvalidHexColors(input)).toBe(input);
+  });
+});
+
 describe("removeDefaultValues", () => {
   it("removes overflow, enable-background, and xml:space defaults", () => {
     const input =

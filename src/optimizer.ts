@@ -1108,8 +1108,46 @@ class SVGOptimizer {
 
   normalizeNamespaces(svg: string): string {
     const cleaned = this.stripXmlDeclarations(svg);
-    const xlinkNormalized = this.normalizeXlinkHrefs(cleaned);
+    const hexFixed = this.fixInvalidHexColors(cleaned);
+    const xlinkNormalized = this.normalizeXlinkHrefs(hexFixed);
     return this.stripUndeclaredNamespacedContent(xlinkNormalized);
+  }
+
+  /**
+   * Repairs malformed hex colours that Inkscape and some other editors can
+   * emit, where a "hex" value contains characters outside the 0-9a-f range
+   * (e.g. `fill="#pf5ccc"`). Each out-of-range digit is collapsed to `f`,
+   * preserving casing (`G` -> `F`, `g` -> `f`).
+   *
+   * Only colour-bearing attributes and style/CSS properties are touched, so
+   * id references such as `url(#gradient)` or `href="#p"` are left untouched.
+   */
+  fixInvalidHexColors(svg: string): string {
+    if (typeof svg !== "string" || svg.indexOf("#") === -1) return svg;
+
+    // Collapse any non-hex letter (g-z) to f, keeping case.
+    const clampHex = (hex: string): string =>
+      hex.replace(/[g-z]/gi, (ch) =>
+        ch === ch.toUpperCase() ? "F" : "f",
+      );
+
+    const colorProps =
+      "fill|stroke|stop-color|color|flood-color|lighting-color|solid-color|text-decoration-color";
+
+    // Attribute form, e.g. fill="#pf5ccc" or stroke='#0fg'.
+    const attrRe = new RegExp(
+      `(\\b(?:${colorProps})\\s*=\\s*["'])(#[0-9a-z]{3,8})\\b`,
+      "gi",
+    );
+    // Style / CSS property form, e.g. style="fill:#pf5ccc" or in <style> blocks.
+    const styleRe = new RegExp(
+      `(\\b(?:${colorProps})\\s*:\\s*)(#[0-9a-z]{3,8})\\b`,
+      "gi",
+    );
+
+    return svg
+      .replace(attrRe, (_m, pre, hex) => pre + clampHex(hex))
+      .replace(styleRe, (_m, pre, hex) => pre + clampHex(hex));
   }
 
   removeDefaultValues(svg: string): string {
