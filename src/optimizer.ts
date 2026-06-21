@@ -1173,9 +1173,7 @@ class SVGOptimizer {
 
     // Collapse any non-hex letter (g-z) to f, keeping case.
     const clampHex = (hex: string): string =>
-      hex.replace(/[g-z]/gi, (ch) =>
-        ch === ch.toUpperCase() ? "F" : "f",
-      );
+      hex.replace(/[g-z]/gi, (ch) => (ch === ch.toUpperCase() ? "F" : "f"));
 
     const colorProps =
       "fill|stroke|stop-color|color|flood-color|lighting-color|solid-color|text-decoration-color";
@@ -1230,6 +1228,11 @@ class SVGOptimizer {
         current = current.parentElement;
       }
       return false;
+    };
+
+    const isZeroLikeValue = (value: string | null): boolean => {
+      if (!value) return false;
+      return /^[-+]?0*\.?0+(?:e[-+]?\d+)?(?:[a-z%]+)?$/i.test(value.trim());
     };
 
     const defaultValues = {
@@ -1317,6 +1320,14 @@ class SVGOptimizer {
           }
         }
       });
+
+      if ((el.localName || el.tagName).toLowerCase() === "marker") {
+        ["refX", "refY"].forEach((attr) => {
+          if (isZeroLikeValue(el.getAttribute(attr))) {
+            el.removeAttribute(attr);
+          }
+        });
+      }
 
       // Special handling for opacity >= 0.9
       const opacityValue = el.getAttribute("opacity");

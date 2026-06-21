@@ -431,6 +431,9 @@ export const App: m.Component = {
             onToggleSidebar: toggleSidebar,
             canOptimize: hasSource,
             onOptimize: () => optimizer.loadOptimizedFile(),
+            canCopy: hasSource,
+            isCopied,
+            onCopy: copyToClipboard,
           }),
           m(
             ".main-content",
@@ -446,8 +449,6 @@ export const App: m.Component = {
               m(".editor-panel#left-panel", [
                 m(EditorPanel, {
                   sourceSvg,
-                  isCopied,
-                  onCopy: copyToClipboard,
                 }),
               ]),
               m("div#dragbar.dragbar"),

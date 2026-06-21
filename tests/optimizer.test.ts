@@ -92,6 +92,24 @@ describe("removeDefaultValues", () => {
     expect(output).not.toContain("ns2:pageBounds");
     expect(output).not.toContain("xmlns:ns2");
   });
+
+  it("removes marker refX/refY when explicitly zero", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs><marker id="m" refX="0" refY="0"/></defs></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.removeDefaultValues(input);
+    expect(output).not.toContain('refX="0"');
+    expect(output).not.toContain('refY="0"');
+  });
+
+  it("keeps marker refX/refY when non-zero", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><defs><marker id="m" refX="1" refY="0.5"/></defs></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.removeDefaultValues(input);
+    expect(output).toContain('refX="1"');
+    expect(output).toContain('refY="0.5"');
+  });
 });
 
 describe("optimizeSvg", () => {

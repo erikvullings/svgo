@@ -1588,8 +1588,20 @@ function renderPropertiesInspector(
             updateElementAttribute(element, "display", checked ? null : "none");
           },
         }),
+        m(
+          "button.property-attr-remove",
+          {
+            type: "button",
+            title: "Remove display",
+            onclick: (e: MouseEvent) => {
+              e.stopPropagation();
+              updateElementAttribute(element, "display", null);
+            },
+          },
+          "x",
+        ),
       ]),
-      m(".property-row", [
+      m(".property-row.opacity-row", [
         m("label", "Opacity"),
         m("input[type=range][min=0][max=1][step=0.05]", {
           value: opacity,
@@ -1602,6 +1614,18 @@ function renderPropertiesInspector(
           },
         }),
         m("span.property-value", opacity),
+        m(
+          "button.property-attr-remove",
+          {
+            type: "button",
+            title: "Remove opacity",
+            onclick: (e: MouseEvent) => {
+              e.stopPropagation();
+              updateElementAttribute(element, "opacity", null);
+            },
+          },
+          "x",
+        ),
       ]),
       showTextQuickControl &&
         m(".property-row.text-row", [
@@ -1618,6 +1642,23 @@ function renderPropertiesInspector(
               updateFromTree(element.ownerDocument);
             },
           }),
+          m(
+            "button.property-attr-remove",
+            {
+              type: "button",
+              title: "Clear text",
+              onclick: (e: MouseEvent) => {
+                e.stopPropagation();
+                if (selectedTextNode) {
+                  selectedTextNode.textContent = "";
+                } else if (element.tagName.toLowerCase() === "text") {
+                  setDirectTextContent(element, "");
+                }
+                updateFromTree(element.ownerDocument);
+              },
+            },
+            "x",
+          ),
         ]),
       ["fill", "stroke"].map((attrName) =>
         m(".property-row.color-row", [
@@ -1643,6 +1684,18 @@ function renderPropertiesInspector(
               );
             },
           }),
+          m(
+            "button.property-attr-remove",
+            {
+              type: "button",
+              title: `Remove ${attrName}`,
+              onclick: (e: MouseEvent) => {
+                e.stopPropagation();
+                updateElementAttribute(element, attrName, null);
+              },
+            },
+            "x",
+          ),
         ]),
       ),
     ]),
@@ -1672,6 +1725,18 @@ function renderPropertiesInspector(
                 );
               },
             }),
+            m(
+              "button.property-attr-remove",
+              {
+                type: "button",
+                title: `Remove ${attrName}`,
+                onclick: (e: MouseEvent) => {
+                  e.stopPropagation();
+                  updateElementAttribute(element, attrName, null);
+                },
+              },
+              "x",
+            ),
           ]),
         ),
       ]),
@@ -1694,6 +1759,18 @@ function renderPropertiesInspector(
                 );
               },
             }),
+            m(
+              "button.property-attr-remove",
+              {
+                type: "button",
+                title: `Remove ${attr.name}`,
+                onclick: (e: MouseEvent) => {
+                  e.stopPropagation();
+                  updateElementAttribute(element, attr.name, null);
+                },
+              },
+              "x",
+            ),
           ]),
         ),
       ]),
