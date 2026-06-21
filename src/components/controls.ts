@@ -150,6 +150,24 @@ export const Controls: m.Component<ControlsAttrs> = {
         ]),
         m(".checkbox-group", [
           m("input[type=checkbox]", {
+            id: "group-text-elements-end",
+            checked: optimizer.options.groupTextElementsAtEnd,
+            onchange: (e: Event) => {
+              optimizer.options.groupTextElementsAtEnd = (
+                e.target as HTMLInputElement
+              ).checked;
+              optimizer.optimizeSvg();
+              optimizer.saveToHistory();
+            },
+          }),
+          m(
+            "label",
+            { for: "group-text-elements-end" },
+            "Move all text elements to end",
+          ),
+        ]),
+        m(".checkbox-group", [
+          m("input[type=checkbox]", {
             id: "auto-autocrop",
             checked: optimizer.options.autoAutocrop,
             onchange: (e: Event) => {

@@ -112,6 +112,52 @@ describe("removeDefaultValues", () => {
   });
 });
 
+describe("moveTextElementsToEnd", () => {
+  it("moves all text elements into a trailing group in original order", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g><text>A</text></g><rect/><text>B</text><g><text>C</text></g></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.moveTextElementsToEnd(input);
+
+    const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    expect(root).toBeTruthy();
+
+    const children = Array.from(root!.children);
+    expect(children[children.length - 1].tagName.toLowerCase()).toBe("g");
+
+    const textValues = Array.from(children[children.length - 1].children).map(
+      (el) => (el.textContent || "").trim(),
+    );
+    expect(textValues).toEqual(["A", "B", "C"]);
+  });
+
+  it("preserves inherited font-size when moving text", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g font-size="18"><text>A</text></g><text>B</text></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.moveTextElementsToEnd(input);
+
+    const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    expect(root).toBeTruthy();
+
+    const group = root!.lastElementChild as Element;
+    expect(group.tagName.toLowerCase()).toBe("g");
+    const movedTexts = Array.from(group.querySelectorAll("text"));
+    expect(movedTexts.length).toBe(2);
+    expect(movedTexts[0].getAttribute("font-size")).toBe("18");
+  });
+
+  it("does nothing when fewer than two text elements exist", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><rect/><g><text>A</text></g></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.moveTextElementsToEnd(input);
+    expect(output).toBe(input);
+  });
+});
+
 describe("optimizeSvg", () => {
   it("removes ns2 namespace after optimization", async () => {
     const input =
@@ -229,5 +275,29 @@ describe("optimizeSvg", () => {
     const mergedMarkerPath =
       /<path\b[^>]*marker-(?:start|end)="[^"]*"[^>]*\bd="[^"]*M[^"]*M/;
     expect(secondPass).not.toMatch(mergedMarkerPath);
+  });
+
+  it("moves text elements into trailing group when option is enabled", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g><text>A</text></g><rect/><text>B</text></svg>';
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.groupTextElementsAtEnd = true;
+    await optimizer.optimizeSvg();
+
+    const doc = new DOMParser().parseFromString(
+      optimizer.optimizedSvg,
+      "image/svg+xml",
+    );
+    const root = doc.querySelector("svg");
+    expect(root).toBeTruthy();
+
+    const children = Array.from(root!.children);
+    expect(children[children.length - 1].tagName.toLowerCase()).toBe("g");
+
+    const textValues = Array.from(children[children.length - 1].children).map(
+      (el) => (el.textContent || "").trim(),
+    );
+    expect(textValues).toEqual(["A", "B"]);
   });
 });

@@ -24,6 +24,7 @@ type OptimizeOptions = {
   removeFontSize: boolean;
   convertSodipodiArcs: boolean;
   groupSimilarElements: boolean;
+  groupTextElementsAtEnd: boolean;
   viewMode: "code" | "tree";
   selectedElementPath: string | null;
   treeDoc: Document | null;
@@ -51,6 +52,7 @@ type PersistedOptions = Pick<
   | "removeFontSize"
   | "convertSodipodiArcs"
   | "groupSimilarElements"
+  | "groupTextElementsAtEnd"
   | "viewMode"
 >;
 
@@ -107,6 +109,7 @@ class SVGOptimizer {
       removeFontSize: false,
       convertSodipodiArcs: true,
       groupSimilarElements: true,
+      groupTextElementsAtEnd: false,
       viewMode: "code", // 'code', 'tree'
       selectedElementPath: null, // JSON path or similar to track selected element
       treeDoc: null, // Parsed DOM for the Tree View
@@ -174,6 +177,7 @@ class SVGOptimizer {
       removeFontSize: this.options.removeFontSize,
       convertSodipodiArcs: this.options.convertSodipodiArcs,
       groupSimilarElements: this.options.groupSimilarElements,
+      groupTextElementsAtEnd: this.options.groupTextElementsAtEnd,
       viewMode: this.options.viewMode,
     };
   }
@@ -253,6 +257,10 @@ class SVGOptimizer {
       raw.groupSimilarElements,
       this.options.groupSimilarElements,
     );
+    this.options.groupTextElementsAtEnd = asBool(
+      raw.groupTextElementsAtEnd,
+      this.options.groupTextElementsAtEnd,
+    );
     this.options.viewMode = asViewMode(raw.viewMode, this.options.viewMode);
   }
 
@@ -307,7 +315,8 @@ class SVGOptimizer {
       this.options.removeStyling ||
       this.options.convertSodipodiArcs ||
       this.options.autoAutocrop ||
-      this.options.useCustomDimensions;
+      this.options.useCustomDimensions ||
+      this.options.groupTextElementsAtEnd;
     const hasGrouping = this.options.groupSimilarElements;
     return hasRounding || hasToggles || hasGrouping;
   }
@@ -1410,30 +1419,67 @@ class SVGOptimizer {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  groupTextByAttributes(svg: string) {
+  moveTextElementsToEnd(svg: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    if (!root) return svg;
 
-    // Find all text elements
-    const textElements = Array.from(
-      doc.querySelectorAll("text, tspan"),
-    ) as Element[];
+    // Collect all <text> elements in document order and move them to a trailing root group.
+    const textElements = Array.from(doc.querySelectorAll("text"));
+    if (textElements.length < 2) return svg;
 
-    if (textElements.length < 2) return svg; // Need at least 2 elements to group
-
-    // Attributes we want to group by
-    const groupableAttributes = [
+    const inheritableTextAttrs = [
       "font-family",
       "font-size",
-      "text-anchor",
       "font-weight",
       "font-style",
+      "font-variant",
+      "text-anchor",
+      "dominant-baseline",
+      "letter-spacing",
+      "word-spacing",
+      "fill",
+      "fill-opacity",
+      "stroke",
+      "stroke-width",
+      "stroke-opacity",
+      "opacity",
     ];
-    this.groupElementsByCommonAttributes(
-      doc,
-      ["text", "tspan"],
-      groupableAttributes,
-    );
+
+    const getStyleProp = (style: string | null, prop: string): string | null => {
+      if (!style) return null;
+      const escaped = prop.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+      const match = style.match(new RegExp(`(?:^|;)\\s*${escaped}\\s*:\\s*([^;]+)`, "i"));
+      return match ? match[1].trim() : null;
+    };
+
+    const resolveInheritedAttr = (el: Element, attr: string): string | null => {
+      let current = el.parentElement;
+      while (current) {
+        const attrValue = current.getAttribute(attr);
+        if (attrValue !== null) return attrValue;
+        const styled = getStyleProp(current.getAttribute("style"), attr);
+        if (styled !== null) return styled;
+        current = current.parentElement;
+      }
+      return null;
+    };
+
+    const textGroup = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+
+    textElements.forEach((textEl) => {
+      inheritableTextAttrs.forEach((attr) => {
+        if (textEl.hasAttribute(attr)) return;
+        const inherited = resolveInheritedAttr(textEl, attr);
+        if (inherited !== null) {
+          textEl.setAttribute(attr, inherited);
+        }
+      });
+      textGroup.appendChild(textEl);
+    });
+
+    root.appendChild(textGroup);
 
     return new XMLSerializer().serializeToString(doc);
   }
@@ -2369,8 +2415,9 @@ class SVGOptimizer {
       // Remove stroke attributes from text elements
       svg = this.removeStrokeFromText(svg);
 
-      // Group text elements by common attributes (always enabled for text optimization)
-      svg = this.groupTextByAttributes(svg);
+      if (this.options.groupTextElementsAtEnd) {
+        svg = this.moveTextElementsToEnd(svg);
+      }
 
       // Merge simple path-only groups and collapse groups with a single child
       svg = this.mergePathsAndCollapseGroups(svg);
