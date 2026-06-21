@@ -7,23 +7,55 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the Advanced SVG Optimizer - a single-page web application for optimizing, cleaning, and resizing SVG files directly in the browser. The project uses SVGO with custom JavaScript transformations for comprehensive SVG optimization.
+This is the Advanced SVG Optimizer - a single-page web application for optimizing, cleaning, and resizing SVG files directly in the browser. The project uses SVGO with custom TypeScript transformations for comprehensive SVG optimization.
 
 ## Architecture
 
 ### Core Components
 
-- **Single HTML Application**: The entire application is contained in `docs/index.html` as a single-page app
-- **SVGOptimizer Class**: The main JavaScript class handling all optimization logic (lines 306-958 in docs/index.html)
-- **Mithril.js Frontend**: Uses Mithril.js framework for UI rendering and state management
-- **Monaco Editor**: Integrated VS Code editor for SVG code editing with syntax highlighting
-- **SVGO Integration**: Uses SVGO browser build for standard SVG optimizations
+- **Vite + TypeScript build**: Source lives in `src/`, built output goes to `docs/` for GitHub Pages deployment.
+- **SVGOptimizer class** (`src/optimizer.ts`): All optimization logic — SVGO integration, custom transforms, import pipeline.
+- **Mithril.js frontend** (`src/ui.ts`, `src/components/`): UI rendering and state management.
+- **Monaco Editor**: Integrated VS Code editor for SVG code editing with syntax highlighting.
+- **SVGO**: npm dependency (`svgo@4`) used for standard SVG optimizations.
+
+### File Structure
+
+```
+├── src/
+│   ├── main.ts                  # Entry point
+│   ├── app.ts                   # App initialisation
+│   ├── optimizer.ts             # SVGOptimizer class (all optimization logic)
+│   ├── ui.ts                    # Top-level Mithril UI, drag-drop, paste handling
+│   ├── treeView.ts              # SVG tree inspector view
+│   ├── treeUtils.ts             # Tree manipulation helpers
+│   ├── svgUtils.ts              # SVG utility functions
+│   ├── elementTemplates.ts      # SVG element insertion templates
+│   ├── styles.css               # Global styles
+│   ├── types/global.d.ts        # Ambient type declarations
+│   └── components/
+│       ├── controls.ts          # Optimization controls sidebar content
+│       ├── editorPanel.ts       # Monaco editor panel
+│       ├── header.ts            # App header
+│       ├── previewPanel.ts      # SVG preview panel
+│       └── sidebar.ts           # Sidebar shell
+├── tests/
+│   ├── optimizer.test.ts        # Unit tests for SVGOptimizer methods
+│   ├── svgUtils.test.ts
+│   ├── elementTemplates.test.ts
+│   └── examples/                # Sample SVG files used by tests
+├── docs/                        # Built output (GitHub Pages — do not edit by hand)
+├── tsconfig.json                # Includes both src/ and tests/
+├── vite.config.ts
+└── package.json
+```
 
 ### Key Features Implementation
 
-1. **Custom SVG Transformations**:
+1. **Custom SVG Transformations** (all in `src/optimizer.ts`):
+   - Invalid hex colour repair (`fixInvalidHexColors` method) — runs on every import
    - Sodipodi arc conversion (`convertSodipodiArcs` method)
-   - Precision control for numeric values (`roundNumbers` method) 
+   - Precision control for numeric values (`roundNumbers` method)
    - Style and group removal (`removeStyling`, `removeGroups` methods)
    - Default value removal (`removeDefaultValues` method)
    - Font attribute control (`removeFontAttributes` method)
@@ -38,57 +70,55 @@ This is the Advanced SVG Optimizer - a single-page web application for optimizin
 ## Development Workflow
 
 ### Local Development
-Since this is a client-side only application with no build process:
 
-1. Navigate to the `docs` folder
-2. Serve the files using a local HTTP server:
-   ```bash
-   cd docs
-   python3 -m http.server
-   # or
-   npx serve
-   ```
-3. Open `index.html` in your browser
-
-### File Structure
+```bash
+pnpm install
+pnpm dev        # starts Vite dev server
+pnpm build      # builds to docs/
+pnpm test       # runs Vitest unit tests
 ```
-└── docs/
-    ├── index.html          # Main application (contains all code)
-    └── [various icons and manifest files for PWA support]
-```
-
-### No Build Process
-- No package.json, no npm scripts, no build tools
-- All dependencies are loaded via CDN (Mithril.js, Monaco Editor, SVGO)
-- Direct file editing and browser refresh for development
-- Deployment is simply committing to the `docs` folder for GitHub Pages
 
 ### Testing
-- Manual testing through the web interface
-- Load various SVG files and verify optimizations work correctly
-- Test drag-and-drop functionality
-- Verify all optimization options produce expected results
+
+- Unit tests use Vitest with a jsdom environment (`// @vitest-environment jsdom`).
+- Test files live in `tests/`, example SVGs in `tests/examples/`.
+- Run all tests: `pnpm test` or `npx vitest run`.
+
+### Deployment
+
+Built output in `docs/` is deployed automatically via GitHub Pages on push to `main`. Never edit `docs/` by hand — always rebuild via `pnpm build`.
 
 ## Key Implementation Details
 
 ### SVG Processing Pipeline
-1. Convert Sodipodi arcs before SVGO processing (to prevent removal)
+
+Every imported SVG string passes through `normalizeNamespaces()` first:
+
+1. `stripXmlDeclarations` — removes `<?xml ...?>` preamble
+2. `fixInvalidHexColors` — clamps out-of-range hex digits (e.g. `#pf5ccc` → `#ff5ccc`)
+3. `normalizeXlinkHrefs` — converts `xlink:href` to `href`, adds missing namespace
+4. `stripUndeclaredNamespacedContent` — removes undeclared namespace prefixes
+
+Then `optimizeSvg()` runs the full pipeline:
+
+1. Convert Sodipodi arcs before SVGO (to prevent removal)
 2. Apply SVGO with comprehensive plugin set
 3. Apply custom transformations (precision, defaults, styling, etc.)
 4. Apply custom resizing if enabled
 5. Display results and statistics
 
-### Critical Methods
+### Critical Methods in `src/optimizer.ts`
+
 - `optimizeSvg()`: Main optimization pipeline orchestrator
+- `normalizeNamespaces()`: Runs on every import — strips declarations, fixes colours, normalises namespaces
+- `fixInvalidHexColors()`: Repairs hex colours with out-of-range digits
 - `convertSodipodiArcs()`: Handles Inkscape-specific arc elements
 - `resizeSvg()`: Intelligent SVG resizing with content bounding box calculation
 - `calculateContentBBox()`: DOM-based SVG content measurement
+- `loadSvgString()` / `loadFile()`: Entry points for SVG import
 
 ### State Management
-- All state is managed within the `SVGOptimizer` class instance
-- Options object controls all optimization settings
-- Mithril.js handles UI reactivity and updates
 
-## Deployment
-
-The application is deployed via GitHub Pages from the `docs` folder. Any changes pushed to the main branch will automatically update the live application at the GitHub Pages URL.
+- All state is managed within the `SVGOptimizer` class instance.
+- Options object controls all optimization settings.
+- Mithril.js handles UI reactivity and updates.
