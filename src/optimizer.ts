@@ -903,12 +903,22 @@ class SVGOptimizer {
       );
     }
 
+    function ancestorHasMarkerAttrs(element: Element) {
+      let parent = element.parentElement;
+      while (parent) {
+        if (hasMarkerAttrs(parent)) return true;
+        parent = parent.parentElement;
+      }
+      return false;
+    }
+
     function canMergeGroup(group: Element) {
       const children = Array.from(group.children);
       if (children.length < 2) return false;
       if (!children.every((child) => child.tagName === "path")) return false;
       if (group.hasAttribute("transform")) return false;
       if (hasMarkerAttrs(group)) return false;
+      if (ancestorHasMarkerAttrs(group)) return false;
       if (children.some((child) => hasMarkerAttrs(child))) {
         return false;
       }
