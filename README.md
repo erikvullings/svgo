@@ -2,8 +2,7 @@
 
 ![Advanced SVG Optimizer Social Preview](https://erikvullings.github.io/svgo/android-chrome-512x512.png)
 
-Advanced SVG Optimizer is a Mithril + SVGO web app with a VS Code extension wrapper.  
-The extension opens the same app in a webview for SVG files.
+Advanced SVG Optimizer is a Mithril + SVGO web app.
 
 ## Live Demo
 
