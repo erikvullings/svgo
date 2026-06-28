@@ -147,6 +147,31 @@ describe("moveTextElementsToEnd", () => {
     const movedTexts = Array.from(group.querySelectorAll("text"));
     expect(movedTexts.length).toBe(2);
     expect(movedTexts[0].getAttribute("font-size")).toBe("18");
+    expect(movedTexts[1].hasAttribute("font-size")).toBe(false);
+  });
+
+  it("removes empty source groups and avoids duplicated shared font-size", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><g font-size="3"><text x="1" y="2" font-size="3">A</text></g><text x="3" y="4" font-size="3">B</text></svg>';
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.moveTextElementsToEnd(input);
+
+    const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+    const root = doc.querySelector("svg");
+    expect(root).toBeTruthy();
+
+    const groups = Array.from(root!.children).filter(
+      (el) => el.tagName.toLowerCase() === "g",
+    );
+    expect(groups.length).toBe(1);
+
+    const group = groups[0];
+    expect(group.getAttribute("font-size")).toBe("3");
+    const movedTexts = Array.from(group.querySelectorAll("text"));
+    expect(movedTexts.length).toBe(2);
+    expect(movedTexts.every((textEl) => !textEl.hasAttribute("font-size"))).toBe(
+      true,
+    );
   });
 
   it("does nothing when fewer than two text elements exist", () => {

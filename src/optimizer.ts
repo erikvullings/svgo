@@ -1467,8 +1467,26 @@ class SVGOptimizer {
     };
 
     const textGroup = doc.createElementNS("http://www.w3.org/2000/svg", "g");
+    const touchedGroups = new Set<Element>();
+
+    const collectAncestorGroups = (el: Element): void => {
+      let current = el.parentElement;
+      while (current) {
+        if (current.tagName.toLowerCase() === "g") touchedGroups.add(current);
+        current = current.parentElement;
+      }
+    };
+
+    const groupHasRenderableContent = (group: Element): boolean => {
+      return Array.from(group.childNodes).some((node) => {
+        if (node.nodeType === 1) return true;
+        if (node.nodeType === 3) return (node.textContent || "").trim() !== "";
+        return false;
+      });
+    };
 
     textElements.forEach((textEl) => {
+      collectAncestorGroups(textEl);
       inheritableTextAttrs.forEach((attr) => {
         if (textEl.hasAttribute(attr)) return;
         const inherited = resolveInheritedAttr(textEl, attr);
@@ -1478,6 +1496,36 @@ class SVGOptimizer {
       });
       textGroup.appendChild(textEl);
     });
+
+    // Hoist common inheritable attributes to the group and strip duplicates on children.
+    inheritableTextAttrs.forEach((attr) => {
+      const firstValue = textElements[0].getAttribute(attr);
+      if (firstValue === null) return;
+      const allMatch = textElements.every(
+        (textEl) => textEl.getAttribute(attr) === firstValue,
+      );
+      if (!allMatch) return;
+      textGroup.setAttribute(attr, firstValue);
+      textElements.forEach((textEl) => textEl.removeAttribute(attr));
+    });
+
+    // Remove groups that only became empty because text nodes were moved out.
+    const getDepth = (el: Element): number => {
+      let depth = 0;
+      let current: Element | null = el;
+      while (current) {
+        depth += 1;
+        current = current.parentElement;
+      }
+      return depth;
+    };
+
+    Array.from(touchedGroups)
+      .sort((a, b) => getDepth(b) - getDepth(a))
+      .forEach((group) => {
+        if (groupHasRenderableContent(group)) return;
+        group.remove();
+      });
 
     root.appendChild(textGroup);
 

@@ -41,7 +41,7 @@ type TreeNodeAttrs = {
 };
 
 type EditingField = "name" | "value";
-type DropPlacement = "before" | "inside" | "after" | "end";
+type DropPlacement = "before" | "inside" | "after";
 
 export const TreeView: m.Component = {
   view() {
@@ -93,6 +93,7 @@ export const TreeView: m.Component = {
 let dragSourcePath: string | null = null;
 let dragOverPath: string | null = null;
 let dragOverPlacement: DropPlacement | null = null;
+let dragOverValid = false;
 
 const COMMON_ATTRIBUTE_SUGGESTIONS = [
   "id",
@@ -243,12 +244,12 @@ const editingState: {
 function clearDragTarget() {
   dragOverPath = null;
   dragOverPlacement = null;
+  dragOverValid = false;
 }
 
 function getDragTargetClass(path: string, placement: DropPlacement) {
-  return dragOverPath === path && dragOverPlacement === placement
-    ? `drag-over-${placement}`
-    : "";
+  if (dragOverPath !== path || dragOverPlacement !== placement) return "";
+  return `drag-over-${placement} ${dragOverValid ? "drag-over-valid" : "drag-over-invalid"}`;
 }
 
 function getRowDropPlacement(
@@ -1077,24 +1078,27 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             dragSourcePath = path;
             e.dataTransfer.setData("text/plain", path);
             e.dataTransfer.effectAllowed = "move";
+            document.body.classList.add("tree-dragging-active");
+            (e as DragEvent & { redraw?: boolean }).redraw = false;
             e.stopPropagation();
           },
           ondragend: () => {
             dragSourcePath = null;
             clearDragTarget();
+            document.body.classList.remove("tree-dragging-active");
           },
           ondragover: (e: DragEvent) => {
             e.preventDefault();
             e.stopPropagation();
             const placement = getRowDropPlacement(e, canInsertChild, isRoot);
             const sourcePath = dragSourcePath ?? "";
-            if (!canDropElement(sourcePath, path, placement)) {
-              clearDragTarget();
-              return;
-            }
-            if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+            const canDrop =
+              canDropElement(sourcePath, path, placement) &&
+              (placement !== "inside" || canInsertChild);
+            if (e.dataTransfer) e.dataTransfer.dropEffect = canDrop ? "move" : "none";
             dragOverPath = path;
             dragOverPlacement = placement;
+            dragOverValid = canDrop;
           },
           ondragleave: () => {
             if (dragOverPath === path) clearDragTarget();
@@ -1105,12 +1109,16 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             const sourcePath = e.dataTransfer
               ? e.dataTransfer.getData("text/plain")
               : "";
-            const placement = dragOverPlacement ?? "inside";
-            if (canDropElement(sourcePath, path, placement)) {
+            const placement = dragOverPlacement ?? getRowDropPlacement(e, canInsertChild, isRoot);
+            const canDrop =
+              canDropElement(sourcePath, path, placement) &&
+              (placement !== "inside" || canInsertChild);
+            if (canDrop) {
               moveElementTo(sourcePath, path, placement);
             }
             clearDragTarget();
             dragSourcePath = null;
+            document.body.classList.remove("tree-dragging-active");
           },
           onclick: (e: MouseEvent) => {
             e.stopPropagation();
@@ -1358,44 +1366,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
           }
         }),
       ),
-      canInsertChild &&
-        dragSourcePath &&
-        m(
-          ".tree-drop-end",
-          {
-            class: getDragTargetClass(path, "end"),
-            ondragover: (e: DragEvent) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const sourcePath = dragSourcePath ?? "";
-              if (!canDropElement(sourcePath, path, "end")) {
-                clearDragTarget();
-                return;
-              }
-              if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-              dragOverPath = path;
-              dragOverPlacement = "end";
-            },
-            ondragleave: () => {
-              if (dragOverPath === path && dragOverPlacement === "end") {
-                clearDragTarget();
-              }
-            },
-            ondrop: (e: DragEvent) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const sourcePath = e.dataTransfer
-                ? e.dataTransfer.getData("text/plain")
-                : "";
-              if (canDropElement(sourcePath, path, "end")) {
-                moveElementTo(sourcePath, path, "end");
-              }
-              clearDragTarget();
-              dragSourcePath = null;
-            },
-          },
-          m("span.tree-prefix", childPrefix),
-        ),
+      null,
     ]);
   },
 };
@@ -1529,6 +1500,26 @@ function setDirectTextContent(element: Element, value: string): void {
   element.insertBefore(textNode, element.firstChild);
 }
 
+function renderRemoveAttributeButton(
+  element: Element,
+  attrName: string,
+  title: string,
+): m.Children {
+  if (!element.hasAttribute(attrName)) return null;
+  return m(
+    "button.property-attr-remove",
+    {
+      type: "button",
+      title,
+      onclick: (e: MouseEvent) => {
+        e.stopPropagation();
+        updateElementAttribute(element, attrName, null);
+      },
+    },
+    "x",
+  );
+}
+
 function renderPropertiesInspector(
   selectedElement: Element | null,
   fallbackSvg: Element,
@@ -1571,6 +1562,7 @@ function renderPropertiesInspector(
       : element.tagName.toLowerCase() === "text"
         ? getDirectTextContent(element)
         : "";
+  const hasQuickText = quickTextValue.length > 0;
 
   return m(".properties-inspector", [
     m(".inspector-header", [
@@ -1588,18 +1580,7 @@ function renderPropertiesInspector(
             updateElementAttribute(element, "display", checked ? null : "none");
           },
         }),
-        m(
-          "button.property-attr-remove",
-          {
-            type: "button",
-            title: "Remove display",
-            onclick: (e: MouseEvent) => {
-              e.stopPropagation();
-              updateElementAttribute(element, "display", null);
-            },
-          },
-          "x",
-        ),
+        renderRemoveAttributeButton(element, "display", "Remove display"),
       ]),
       m(".property-row.opacity-row", [
         m("label", "Opacity"),
@@ -1614,18 +1595,7 @@ function renderPropertiesInspector(
           },
         }),
         m("span.property-value", opacity),
-        m(
-          "button.property-attr-remove",
-          {
-            type: "button",
-            title: "Remove opacity",
-            onclick: (e: MouseEvent) => {
-              e.stopPropagation();
-              updateElementAttribute(element, "opacity", null);
-            },
-          },
-          "x",
-        ),
+        renderRemoveAttributeButton(element, "opacity", "Remove opacity"),
       ]),
       showTextQuickControl &&
         m(".property-row.text-row", [
@@ -1642,23 +1612,24 @@ function renderPropertiesInspector(
               updateFromTree(element.ownerDocument);
             },
           }),
-          m(
-            "button.property-attr-remove",
-            {
-              type: "button",
-              title: "Clear text",
-              onclick: (e: MouseEvent) => {
-                e.stopPropagation();
-                if (selectedTextNode) {
-                  selectedTextNode.textContent = "";
-                } else if (element.tagName.toLowerCase() === "text") {
-                  setDirectTextContent(element, "");
-                }
-                updateFromTree(element.ownerDocument);
+          hasQuickText &&
+            m(
+              "button.property-attr-remove",
+              {
+                type: "button",
+                title: "Clear text",
+                onclick: (e: MouseEvent) => {
+                  e.stopPropagation();
+                  if (selectedTextNode) {
+                    selectedTextNode.textContent = "";
+                  } else if (element.tagName.toLowerCase() === "text") {
+                    setDirectTextContent(element, "");
+                  }
+                  updateFromTree(element.ownerDocument);
+                },
               },
-            },
-            "x",
-          ),
+              "x",
+            ),
         ]),
       ["fill", "stroke"].map((attrName) =>
         m(".property-row.color-row", [
@@ -1684,18 +1655,7 @@ function renderPropertiesInspector(
               );
             },
           }),
-          m(
-            "button.property-attr-remove",
-            {
-              type: "button",
-              title: `Remove ${attrName}`,
-              onclick: (e: MouseEvent) => {
-                e.stopPropagation();
-                updateElementAttribute(element, attrName, null);
-              },
-            },
-            "x",
-          ),
+          renderRemoveAttributeButton(element, attrName, `Remove ${attrName}`),
         ]),
       ),
     ]),
@@ -1725,18 +1685,7 @@ function renderPropertiesInspector(
                 );
               },
             }),
-            m(
-              "button.property-attr-remove",
-              {
-                type: "button",
-                title: `Remove ${attrName}`,
-                onclick: (e: MouseEvent) => {
-                  e.stopPropagation();
-                  updateElementAttribute(element, attrName, null);
-                },
-              },
-              "x",
-            ),
+            renderRemoveAttributeButton(element, attrName, `Remove ${attrName}`),
           ]),
         ),
       ]),
@@ -1865,7 +1814,7 @@ function moveElementTo(
 
   if (source && target) {
     if (
-      (placement === "inside" || placement === "end") &&
+      placement === "inside" &&
       !canContainSvgElements(target)
     ) {
       return;
@@ -1874,8 +1823,6 @@ function moveElementTo(
     const targetParent = target.parentElement;
 
     if (placement === "inside") {
-      target.insertBefore(source, target.firstElementChild);
-    } else if (placement === "end") {
       target.appendChild(source);
     } else if (placement === "before" && targetParent) {
       targetParent.insertBefore(source, target);
