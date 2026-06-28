@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { collapseTransforms, roundPathData, roundNumericValueFixed } from "../src/svgUtils";
+import {
+  collapseTransforms,
+  roundPathData,
+  roundNumericValueFixed,
+} from "../src/svgUtils";
 
 describe("roundPathData", () => {
   it("separates adjacent numbers after rounding to 0 decimals", () => {
@@ -11,12 +15,12 @@ describe("roundPathData", () => {
 });
 
 describe("roundNumericValueFixed with fractional-sensitive safety", () => {
-  it("keeps opacity to 1 decimal when rounding to 0 decimals", () => {
-    expect(roundNumericValueFixed("0.3", 0, "opacity")).toBe(".3");
-    expect(roundNumericValueFixed("0.31", 0, "opacity")).toBe(".3");
-    expect(roundNumericValueFixed("0.05", 0, "opacity")).toBe(".1");
-    expect(roundNumericValueFixed("0.004", 0, "opacity")).toBe("0");
-    expect(roundNumericValueFixed("0.0003", 0, "fill-opacity")).toBe("0");
+  it("excludes opacity and fill-opacity from rounding at precision 0", () => {
+    expect(roundNumericValueFixed("0.3", 0, "opacity")).toBe("0.3");
+    expect(roundNumericValueFixed("0.31", 0, "opacity")).toBe("0.31");
+    expect(roundNumericValueFixed("0.05", 0, "opacity")).toBe("0.05");
+    expect(roundNumericValueFixed("0.004", 0, "opacity")).toBe("0.004");
+    expect(roundNumericValueFixed("0.0003", 0, "fill-opacity")).toBe("0.0003");
   });
 
   it("keeps thin stroke-width to 1 decimal when rounding to 0 decimals", () => {

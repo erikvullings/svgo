@@ -1,50 +1,152 @@
 export const ROUNDABLE_ATTRS = new Set([
-  'x', 'y', 'cx', 'cy',
-  'width', 'height',
-  'r', 'rx', 'ry',
-  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
-  'stroke-width', 'font-size'
+  "x",
+  "y",
+  "cx",
+  "cy",
+  "width",
+  "height",
+  "r",
+  "rx",
+  "ry",
+  "opacity",
+  "fill-opacity",
+  "stroke-opacity",
+  "stop-opacity",
+  "stroke-width",
+  "font-size",
 ]);
 
 export const OPACITY_ATTRS = new Set([
-  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
+  "opacity",
+  "fill-opacity",
+  "stroke-opacity",
+  "stop-opacity",
 ]);
 
+// These attributes are never rounded when precision = 0 (values like 0.35 must be preserved)
+export const PRECISION_EXCLUDED_ATTRS = new Set(["opacity", "fill-opacity"]);
+
 export const NUMERIC_ATTRS = new Set([
-  'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy',
-  'r', 'rx', 'ry', 'width', 'height',
-  'dx', 'dy', 'font-size', 'stroke-width',
-  'opacity', 'fill-opacity', 'stroke-opacity', 'stop-opacity',
-  'stroke-dashoffset', 'stroke-miterlimit',
-  'letter-spacing', 'word-spacing',
-  'pathlength'
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "width",
+  "height",
+  "dx",
+  "dy",
+  "font-size",
+  "stroke-width",
+  "opacity",
+  "fill-opacity",
+  "stroke-opacity",
+  "stop-opacity",
+  "stroke-dashoffset",
+  "stroke-miterlimit",
+  "letter-spacing",
+  "word-spacing",
+  "pathlength",
 ]);
 
 export const NUMERIC_LIST_ATTRS = new Set([
-  'viewbox', 'points', 'stroke-dasharray'
+  "viewbox",
+  "points",
+  "stroke-dasharray",
 ]);
 
 export const KNOWN_SVG_ATTRS = new Set([
-  'id', 'class', 'style', 'transform', 'opacity', 'display', 'visibility',
-  'fill', 'fill-opacity', 'fill-rule', 'stroke', 'stroke-width', 'stroke-linecap',
-  'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset', 'stroke-miterlimit',
-  'stroke-opacity', 'clip-path', 'mask', 'filter', 'vector-effect',
-  'shape-rendering', 'text-rendering', 'paint-order', 'pointer-events',
-  'overflow', 'enable-background',
-  'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
-  'width', 'height', 'd', 'points', 'pathlength',
-  'dx', 'dy', 'font-family', 'font-size', 'font-weight', 'font-style',
-  'text-anchor', 'dominant-baseline', 'letter-spacing', 'word-spacing',
-  'viewbox', 'preserveaspectratio',
-  'href', 'xlink:href',
-  'offset', 'stop-color', 'stop-opacity',
-  'gradientunits', 'gradienttransform', 'fx', 'fy',
-  'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'markerunits',
-  'marker-start', 'marker-mid', 'marker-end',
-  'patternunits', 'patterncontentunits', 'patterntransform',
-  'maskunits', 'maskcontentunits', 'clippathunits',
-  'version', 'baseprofile',
-  'xmlns', 'xmlns:xlink', 'xml:space'
+  "id",
+  "class",
+  "style",
+  "transform",
+  "opacity",
+  "display",
+  "visibility",
+  "fill",
+  "fill-opacity",
+  "fill-rule",
+  "stroke",
+  "stroke-width",
+  "stroke-linecap",
+  "stroke-linejoin",
+  "stroke-dasharray",
+  "stroke-dashoffset",
+  "stroke-miterlimit",
+  "stroke-opacity",
+  "clip-path",
+  "mask",
+  "filter",
+  "vector-effect",
+  "shape-rendering",
+  "text-rendering",
+  "paint-order",
+  "pointer-events",
+  "overflow",
+  "enable-background",
+  "x",
+  "y",
+  "x1",
+  "y1",
+  "x2",
+  "y2",
+  "cx",
+  "cy",
+  "r",
+  "rx",
+  "ry",
+  "width",
+  "height",
+  "d",
+  "points",
+  "pathlength",
+  "dx",
+  "dy",
+  "font-family",
+  "font-size",
+  "font-weight",
+  "font-style",
+  "text-anchor",
+  "dominant-baseline",
+  "letter-spacing",
+  "word-spacing",
+  "viewbox",
+  "preserveaspectratio",
+  "href",
+  "xlink:href",
+  "offset",
+  "stop-color",
+  "stop-opacity",
+  "gradientunits",
+  "gradienttransform",
+  "fx",
+  "fy",
+  "markerwidth",
+  "markerheight",
+  "refx",
+  "refy",
+  "orient",
+  "markerunits",
+  "marker-start",
+  "marker-mid",
+  "marker-end",
+  "patternunits",
+  "patterncontentunits",
+  "patterntransform",
+  "maskunits",
+  "maskcontentunits",
+  "clippathunits",
+  "version",
+  "baseprofile",
+  "xmlns",
+  "xmlns:xlink",
+  "xml:space",
 ]);
 
 export function hasRoundableAttrs(node: Element): boolean {
@@ -54,21 +156,25 @@ export function hasRoundableAttrs(node: Element): boolean {
     if (ROUNDABLE_ATTRS.has(attr.name)) return true;
   }
 
-  return Array.from(node.children || []).some(child => hasRoundableAttrs(child));
+  return Array.from(node.children || []).some((child) =>
+    hasRoundableAttrs(child),
+  );
 }
 
 export function extractTranslate(transform: string | null) {
-  if (!transform) return { dx: 0, dy: 0, rest: '' };
+  if (!transform) return { dx: 0, dy: 0, rest: "" };
 
   let dx = 0;
   let dy = 0;
 
-  const rest = transform.replace(/translate\(\s*([^)]+)\)/g, (_: string, args: string) => {
-    const parts = args.split(/[\s,]+/).map(Number);
-    dx += parts[0] || 0;
-    dy += parts[1] || 0;
-    return '';
-  }).trim();
+  const rest = transform
+    .replace(/translate\(\s*([^)]+)\)/g, (_: string, args: string) => {
+      const parts = args.split(/[\s,]+/).map(Number);
+      dx += parts[0] || 0;
+      dy += parts[1] || 0;
+      return "";
+    })
+    .trim();
 
   return { dx, dy, rest };
 }
@@ -79,16 +185,16 @@ export function roundAttrsRecursive(node: Element) {
   let dx = 0;
   let dy = 0;
 
-  const transform = node.getAttribute('transform');
+  const transform = node.getAttribute("transform");
   if (transform) {
     const extracted = extractTranslate(transform);
     dx = extracted.dx;
     dy = extracted.dy;
 
     if (extracted.rest) {
-      node.setAttribute('transform', extracted.rest);
+      node.setAttribute("transform", extracted.rest);
     } else {
-      node.removeAttribute('transform');
+      node.removeAttribute("transform");
     }
   }
 
@@ -99,9 +205,9 @@ export function roundAttrsRecursive(node: Element) {
     if (!Number.isFinite(num)) continue;
 
     // Apply translation first
-    if (attr.name === 'x' || attr.name === 'cx') {
+    if (attr.name === "x" || attr.name === "cx") {
       num += dx;
-    } else if (attr.name === 'y' || attr.name === 'cy') {
+    } else if (attr.name === "y" || attr.name === "cy") {
       num += dy;
     }
 
@@ -109,7 +215,7 @@ export function roundAttrsRecursive(node: Element) {
     node.setAttribute(attr.name, newValue);
   }
 
-  Array.from(node.children).forEach(child => roundAttrsRecursive(child));
+  Array.from(node.children).forEach((child) => roundAttrsRecursive(child));
 }
 
 export function roundNumericValue(value: string, precision: number) {
@@ -137,16 +243,30 @@ export function roundNumericValue(value: string, precision: number) {
   return formatNumberCompact(rounded);
 }
 
-export function roundNumericValueFixed(value: string, precision: number, attrName?: string) {
+export function roundNumericValueFixed(
+  value: string,
+  precision: number,
+  attrName?: string,
+) {
   const num = parseFloat(value);
   if (!Number.isFinite(num)) return value;
 
   const normalizedAttr = attrName?.toLowerCase();
+
+  // Never round opacity/fill-opacity at precision=0 — fractional values like 0.35 are meaningful
+  if (
+    precision === 0 &&
+    normalizedAttr &&
+    PRECISION_EXCLUDED_ATTRS.has(normalizedAttr)
+  ) {
+    return value;
+  }
+
   const shouldKeepOneDecimal =
     precision === 0 &&
     normalizedAttr &&
     (OPACITY_ATTRS.has(normalizedAttr) ||
-      (normalizedAttr === 'stroke-width' && Math.abs(num) < 0.5));
+      (normalizedAttr === "stroke-width" && Math.abs(num) < 0.5));
 
   if (shouldKeepOneDecimal) {
     return formatNumberCompact(parseFloat(num.toFixed(1)));
@@ -159,39 +279,43 @@ export function roundNumericValueFixed(value: string, precision: number, attrNam
 
 export function formatNumberCompact(num: number) {
   if (!Number.isFinite(num)) return String(num);
-  if (num === 0) return '0';
+  if (num === 0) return "0";
   let result = num.toString();
-  if (result.startsWith('0.')) {
+  if (result.startsWith("0.")) {
     result = result.substring(1);
-  } else if (result.startsWith('-0.')) {
-    result = '-' + result.substring(2);
+  } else if (result.startsWith("-0.")) {
+    result = "-" + result.substring(2);
   }
   return result;
 }
 
-export function roundNumericList(value: string, precision: number, attrName?: string) {
-  return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, match =>
-    roundNumericValueFixed(match, precision, attrName)
+export function roundNumericList(
+  value: string,
+  precision: number,
+  attrName?: string,
+) {
+  return value.replace(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi, (match) =>
+    roundNumericValueFixed(match, precision, attrName),
   );
 }
 
 export function roundPathData(value: string, precision: number) {
   const tokenRe = /([a-zA-Z])|([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/g;
-  const tokens: Array<{ type: 'cmd' | 'num'; value: string }> = [];
+  const tokens: Array<{ type: "cmd" | "num"; value: string }> = [];
   let match: RegExpExecArray | null;
   while ((match = tokenRe.exec(value)) !== null) {
     if (match[1]) {
-      tokens.push({ type: 'cmd', value: match[1] });
+      tokens.push({ type: "cmd", value: match[1] });
     } else {
-      tokens.push({ type: 'num', value: match[2] });
+      tokens.push({ type: "num", value: match[2] });
     }
   }
 
   if (tokens.length === 0) return value;
 
-  let out = '';
+  let out = "";
   for (const token of tokens) {
-    if (token.type === 'cmd') {
+    if (token.type === "cmd") {
       out += token.value;
       continue;
     }
@@ -204,7 +328,7 @@ export function roundPathData(value: string, precision: number) {
 
     const prev = out[out.length - 1];
     if (/[0-9.+-]|[eE]/.test(prev)) {
-      out += ' ' + rounded;
+      out += " " + rounded;
     } else {
       out += rounded;
     }
@@ -214,7 +338,10 @@ export function roundPathData(value: string, precision: number) {
 }
 
 export function applyTranslateToPoints(value: string, dx: number, dy: number) {
-  const parts = value.trim().split(/[\s,]+/).map(Number);
+  const parts = value
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
   if (parts.length < 2) return value;
   const result = [];
   for (let i = 0; i < parts.length; i += 2) {
@@ -223,12 +350,12 @@ export function applyTranslateToPoints(value: string, dx: number, dy: number) {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return value;
     result.push(formatNumberCompact(x + dx), formatNumberCompact(y + dy));
   }
-  return result.join(' ');
+  return result.join(" ");
 }
 
 export function translatePathData(pathData: string, dx: number, dy: number) {
-  const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  temp.setAttribute('d', pathData);
+  const temp = document.createElementNS("http://www.w3.org/2000/svg", "path");
+  temp.setAttribute("d", pathData);
   if (!temp.getPathData) {
     return translatePathDataFallback(pathData, dx, dy);
   }
@@ -243,21 +370,21 @@ export function translatePathData(pathData: string, dx: number, dy: number) {
       return translatePathDataFallback(pathData, dx, dy);
     }
   }
-  segments.forEach(seg => {
+  segments.forEach((seg) => {
     switch (seg.type) {
-      case 'M':
-      case 'L':
-      case 'T':
+      case "M":
+      case "L":
+      case "T":
         seg.values[0] += dx;
         seg.values[1] += dy;
         break;
-      case 'H':
+      case "H":
         seg.values[0] += dx;
         break;
-      case 'V':
+      case "V":
         seg.values[0] += dy;
         break;
-      case 'C':
+      case "C":
         seg.values[0] += dx;
         seg.values[1] += dy;
         seg.values[2] += dx;
@@ -265,14 +392,14 @@ export function translatePathData(pathData: string, dx: number, dy: number) {
         seg.values[4] += dx;
         seg.values[5] += dy;
         break;
-      case 'S':
-      case 'Q':
+      case "S":
+      case "Q":
         seg.values[0] += dx;
         seg.values[1] += dy;
         seg.values[2] += dx;
         seg.values[3] += dy;
         break;
-      case 'A':
+      case "A":
         seg.values[5] += dx;
         seg.values[6] += dy;
         break;
@@ -281,28 +408,43 @@ export function translatePathData(pathData: string, dx: number, dy: number) {
     }
   });
 
-  return segments.map(seg => {
-    const values = seg.values.length ? seg.values.join(' ') : '';
-    return `${seg.type}${values ? ' ' + values : ''}`;
-  }).join(' ');
+  return segments
+    .map((seg) => {
+      const values = seg.values.length ? seg.values.join(" ") : "";
+      return `${seg.type}${values ? " " + values : ""}`;
+    })
+    .join(" ");
 }
 
-export function translatePathDataFallback(pathData: string, dx: number, dy: number) {
+export function translatePathDataFallback(
+  pathData: string,
+  dx: number,
+  dy: number,
+) {
   const tokenRe = /([a-zA-Z])|([-+]?\d*\.?\d+(?:e[-+]?\d+)?)/g;
-  const tokens: Array<{ type: 'cmd' | 'num'; value: string }> = [];
+  const tokens: Array<{ type: "cmd" | "num"; value: string }> = [];
   let match: RegExpExecArray | null;
   while ((match = tokenRe.exec(pathData)) !== null) {
     if (match[1]) {
-      tokens.push({ type: 'cmd', value: match[1] });
+      tokens.push({ type: "cmd", value: match[1] });
     } else {
-      tokens.push({ type: 'num', value: match[2] });
+      tokens.push({ type: "num", value: match[2] });
     }
   }
 
   if (tokens.length === 0) return null;
 
   const paramCounts: Record<string, number> = {
-    m: 2, l: 2, h: 1, v: 1, c: 6, s: 4, q: 4, t: 2, a: 7, z: 0
+    m: 2,
+    l: 2,
+    h: 1,
+    v: 1,
+    c: 6,
+    s: 4,
+    q: 4,
+    t: 2,
+    a: 7,
+    z: 0,
   };
 
   let i = 0;
@@ -316,7 +458,7 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
 
   function readNumbers() {
     const nums: number[] = [];
-    while (i < tokens.length && tokens[i].type === 'num') {
+    while (i < tokens.length && tokens[i].type === "num") {
       nums.push(parseFloat(tokens[i].value));
       i += 1;
     }
@@ -324,7 +466,7 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
   }
 
   while (i < tokens.length) {
-    if (tokens[i].type === 'cmd') {
+    if (tokens[i].type === "cmd") {
       cmd = tokens[i].value;
       i += 1;
     }
@@ -336,7 +478,7 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
     const paramCount = paramCounts[cmdLower];
 
     if (paramCount === 0) {
-      out.push('Z');
+      out.push("Z");
       currentX = subStartX;
       currentY = subStartY;
       firstCommand = false;
@@ -353,24 +495,32 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
       if (chunk.length < paramCount) return null;
 
       switch (cmdLower) {
-        case 'm': {
+        case "m": {
           if (isAbs) {
             const nx = chunk[0] + dx;
             const ny = chunk[1] + dy;
-            out.push('M', formatNumberCompact(nx), formatNumberCompact(ny));
+            out.push("M", formatNumberCompact(nx), formatNumberCompact(ny));
             currentX = chunk[0];
             currentY = chunk[1];
             subStartX = chunk[0];
             subStartY = chunk[1];
           } else {
             if (firstCommand) {
-              out.push('M', formatNumberCompact(chunk[0]), formatNumberCompact(chunk[1]));
+              out.push(
+                "M",
+                formatNumberCompact(chunk[0]),
+                formatNumberCompact(chunk[1]),
+              );
               currentX = chunk[0];
               currentY = chunk[1];
               subStartX = chunk[0];
               subStartY = chunk[1];
             } else {
-              out.push('m', formatNumberCompact(chunk[0]), formatNumberCompact(chunk[1]));
+              out.push(
+                "m",
+                formatNumberCompact(chunk[0]),
+                formatNumberCompact(chunk[1]),
+              );
               currentX += chunk[0];
               currentY += chunk[1];
               subStartX = currentX;
@@ -379,154 +529,166 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
           }
           break;
         }
-        case 'l': {
+        case "l": {
           if (isAbs) {
-            out.push('L',
+            out.push(
+              "L",
               formatNumberCompact(chunk[0] + dx),
-              formatNumberCompact(chunk[1] + dy)
+              formatNumberCompact(chunk[1] + dy),
             );
             currentX = chunk[0];
             currentY = chunk[1];
           } else {
-            out.push('l',
+            out.push(
+              "l",
               formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1])
+              formatNumberCompact(chunk[1]),
             );
             currentX += chunk[0];
             currentY += chunk[1];
           }
           break;
         }
-        case 'h': {
+        case "h": {
           if (isAbs) {
-            out.push('H', formatNumberCompact(chunk[0] + dx));
+            out.push("H", formatNumberCompact(chunk[0] + dx));
             currentX = chunk[0];
           } else {
-            out.push('h', formatNumberCompact(chunk[0]));
+            out.push("h", formatNumberCompact(chunk[0]));
             currentX += chunk[0];
           }
           break;
         }
-        case 'v': {
+        case "v": {
           if (isAbs) {
-            out.push('V', formatNumberCompact(chunk[0] + dy));
+            out.push("V", formatNumberCompact(chunk[0] + dy));
             currentY = chunk[0];
           } else {
-            out.push('v', formatNumberCompact(chunk[0]));
+            out.push("v", formatNumberCompact(chunk[0]));
             currentY += chunk[0];
           }
           break;
         }
-        case 'c': {
+        case "c": {
           if (isAbs) {
-            out.push('C',
+            out.push(
+              "C",
               formatNumberCompact(chunk[0] + dx),
               formatNumberCompact(chunk[1] + dy),
               formatNumberCompact(chunk[2] + dx),
               formatNumberCompact(chunk[3] + dy),
               formatNumberCompact(chunk[4] + dx),
-              formatNumberCompact(chunk[5] + dy)
+              formatNumberCompact(chunk[5] + dy),
             );
             currentX = chunk[4];
             currentY = chunk[5];
           } else {
-            out.push('c',
-              formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1]),
-              formatNumberCompact(chunk[2]),
-              formatNumberCompact(chunk[3]),
-              formatNumberCompact(chunk[4]),
-              formatNumberCompact(chunk[5])
-            );
-            currentX += chunk[4];
-            currentY += chunk[5];
-          }
-          break;
-        }
-        case 's': {
-          if (isAbs) {
-            out.push('S',
-              formatNumberCompact(chunk[0] + dx),
-              formatNumberCompact(chunk[1] + dy),
-              formatNumberCompact(chunk[2] + dx),
-              formatNumberCompact(chunk[3] + dy)
-            );
-            currentX = chunk[2];
-            currentY = chunk[3];
-          } else {
-            out.push('s',
-              formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1]),
-              formatNumberCompact(chunk[2]),
-              formatNumberCompact(chunk[3])
-            );
-            currentX += chunk[2];
-            currentY += chunk[3];
-          }
-          break;
-        }
-        case 'q': {
-          if (isAbs) {
-            out.push('Q',
-              formatNumberCompact(chunk[0] + dx),
-              formatNumberCompact(chunk[1] + dy),
-              formatNumberCompact(chunk[2] + dx),
-              formatNumberCompact(chunk[3] + dy)
-            );
-            currentX = chunk[2];
-            currentY = chunk[3];
-          } else {
-            out.push('q',
-              formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1]),
-              formatNumberCompact(chunk[2]),
-              formatNumberCompact(chunk[3])
-            );
-            currentX += chunk[2];
-            currentY += chunk[3];
-          }
-          break;
-        }
-        case 't': {
-          if (isAbs) {
-            out.push('T',
-              formatNumberCompact(chunk[0] + dx),
-              formatNumberCompact(chunk[1] + dy)
-            );
-            currentX = chunk[0];
-            currentY = chunk[1];
-          } else {
-            out.push('t',
-              formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1])
-            );
-            currentX += chunk[0];
-            currentY += chunk[1];
-          }
-          break;
-        }
-        case 'a': {
-          if (isAbs) {
-            out.push('A',
-              formatNumberCompact(chunk[0]),
-              formatNumberCompact(chunk[1]),
-              formatNumberCompact(chunk[2]),
-              formatNumberCompact(chunk[3]),
-              formatNumberCompact(chunk[4]),
-              formatNumberCompact(chunk[5] + dx),
-              formatNumberCompact(chunk[6] + dy)
-            );
-            currentX = chunk[5];
-            currentY = chunk[6];
-          } else {
-            out.push('a',
+            out.push(
+              "c",
               formatNumberCompact(chunk[0]),
               formatNumberCompact(chunk[1]),
               formatNumberCompact(chunk[2]),
               formatNumberCompact(chunk[3]),
               formatNumberCompact(chunk[4]),
               formatNumberCompact(chunk[5]),
-              formatNumberCompact(chunk[6])
+            );
+            currentX += chunk[4];
+            currentY += chunk[5];
+          }
+          break;
+        }
+        case "s": {
+          if (isAbs) {
+            out.push(
+              "S",
+              formatNumberCompact(chunk[0] + dx),
+              formatNumberCompact(chunk[1] + dy),
+              formatNumberCompact(chunk[2] + dx),
+              formatNumberCompact(chunk[3] + dy),
+            );
+            currentX = chunk[2];
+            currentY = chunk[3];
+          } else {
+            out.push(
+              "s",
+              formatNumberCompact(chunk[0]),
+              formatNumberCompact(chunk[1]),
+              formatNumberCompact(chunk[2]),
+              formatNumberCompact(chunk[3]),
+            );
+            currentX += chunk[2];
+            currentY += chunk[3];
+          }
+          break;
+        }
+        case "q": {
+          if (isAbs) {
+            out.push(
+              "Q",
+              formatNumberCompact(chunk[0] + dx),
+              formatNumberCompact(chunk[1] + dy),
+              formatNumberCompact(chunk[2] + dx),
+              formatNumberCompact(chunk[3] + dy),
+            );
+            currentX = chunk[2];
+            currentY = chunk[3];
+          } else {
+            out.push(
+              "q",
+              formatNumberCompact(chunk[0]),
+              formatNumberCompact(chunk[1]),
+              formatNumberCompact(chunk[2]),
+              formatNumberCompact(chunk[3]),
+            );
+            currentX += chunk[2];
+            currentY += chunk[3];
+          }
+          break;
+        }
+        case "t": {
+          if (isAbs) {
+            out.push(
+              "T",
+              formatNumberCompact(chunk[0] + dx),
+              formatNumberCompact(chunk[1] + dy),
+            );
+            currentX = chunk[0];
+            currentY = chunk[1];
+          } else {
+            out.push(
+              "t",
+              formatNumberCompact(chunk[0]),
+              formatNumberCompact(chunk[1]),
+            );
+            currentX += chunk[0];
+            currentY += chunk[1];
+          }
+          break;
+        }
+        case "a": {
+          if (isAbs) {
+            out.push(
+              "A",
+              formatNumberCompact(chunk[0]),
+              formatNumberCompact(chunk[1]),
+              formatNumberCompact(chunk[2]),
+              formatNumberCompact(chunk[3]),
+              formatNumberCompact(chunk[4]),
+              formatNumberCompact(chunk[5] + dx),
+              formatNumberCompact(chunk[6] + dy),
+            );
+            currentX = chunk[5];
+            currentY = chunk[6];
+          } else {
+            out.push(
+              "a",
+              formatNumberCompact(chunk[0]),
+              formatNumberCompact(chunk[1]),
+              formatNumberCompact(chunk[2]),
+              formatNumberCompact(chunk[3]),
+              formatNumberCompact(chunk[4]),
+              formatNumberCompact(chunk[5]),
+              formatNumberCompact(chunk[6]),
             );
             currentX += chunk[5];
             currentY += chunk[6];
@@ -540,22 +702,22 @@ export function translatePathDataFallback(pathData: string, dx: number, dy: numb
     }
   }
 
-  return out.join(' ');
+  return out.join(" ");
 }
 
 export function collapseTransforms(svg: string) {
   const parser = new DOMParser();
-  const doc = parser.parseFromString(svg, 'image/svg+xml');
-  const svgEl = doc.querySelector('svg');
+  const doc = parser.parseFromString(svg, "image/svg+xml");
+  const svgEl = doc.querySelector("svg");
   if (!svgEl) return svg;
 
-  const XLINK_NS = 'http://www.w3.org/1999/xlink';
+  const XLINK_NS = "http://www.w3.org/1999/xlink";
 
   const getHref = (el: Element): string | null => {
     return (
-      el.getAttribute('href') ||
-      el.getAttribute('xlink:href') ||
-      el.getAttributeNS(XLINK_NS, 'href')
+      el.getAttribute("href") ||
+      el.getAttribute("xlink:href") ||
+      el.getAttributeNS(XLINK_NS, "href")
     );
   };
 
@@ -567,21 +729,21 @@ export function collapseTransforms(svg: string) {
 
   const paintUserSpace = new Map<string, boolean>();
   const paintElements = Array.from(
-    doc.querySelectorAll('linearGradient, radialGradient, pattern')
+    doc.querySelectorAll("linearGradient, radialGradient, pattern"),
   );
 
   const resolveUnits = (el: Element, trail: Set<Element>): string | null => {
     const tag = el.tagName.toLowerCase();
-    if (tag === 'lineargradient' || tag === 'radialgradient') {
-      const units = el.getAttribute('gradientUnits');
+    if (tag === "lineargradient" || tag === "radialgradient") {
+      const units = el.getAttribute("gradientUnits");
       if (units) return units;
-    } else if (tag === 'pattern') {
-      const units = el.getAttribute('patternUnits');
+    } else if (tag === "pattern") {
+      const units = el.getAttribute("patternUnits");
       if (units) return units;
     }
 
     const href = getHref(el);
-    if (!href || !href.startsWith('#')) return null;
+    if (!href || !href.startsWith("#")) return null;
     const targetId = href.slice(1);
     const target = doc.querySelector(`[id="${targetId}"]`);
     if (!target || trail.has(target)) return null;
@@ -590,21 +752,21 @@ export function collapseTransforms(svg: string) {
   };
 
   paintElements.forEach((el) => {
-    const id = el.getAttribute('id');
+    const id = el.getAttribute("id");
     if (!id) return;
     const units = resolveUnits(el, new Set([el]));
-    paintUserSpace.set(id, units === 'userSpaceOnUse');
+    paintUserSpace.set(id, units === "userSpaceOnUse");
   });
 
   function hasUserSpacePaint(el: Element): boolean {
-    const fillId = getPaintRefId(el.getAttribute('fill'));
-    const strokeId = getPaintRefId(el.getAttribute('stroke'));
+    const fillId = getPaintRefId(el.getAttribute("fill"));
+    const strokeId = getPaintRefId(el.getAttribute("stroke"));
     const fillUserSpace = fillId ? paintUserSpace.get(fillId) : false;
     const strokeUserSpace = strokeId ? paintUserSpace.get(strokeId) : false;
     if (fillUserSpace || strokeUserSpace) {
       return true;
     }
-    const style = el.getAttribute('style');
+    const style = el.getAttribute("style");
     if (style) {
       const fillMatch = style.match(/fill\s*:\s*url\(#([^)]+)\)/i);
       const strokeMatch = style.match(/stroke\s*:\s*url\(#([^)]+)\)/i);
@@ -631,15 +793,18 @@ export function collapseTransforms(svg: string) {
 
   function canTranslate(el: Element) {
     const tag = el.tagName.toLowerCase();
-    if (tag === 'g' || tag === 'svg') {
-      return Array.from(el.children).every(child => canTranslate(child));
+    if (tag === "g" || tag === "svg") {
+      return Array.from(el.children).every((child) => canTranslate(child));
     }
-    if (tag === 'path') {
-      const d = el.getAttribute('d');
+    if (tag === "path") {
+      const d = el.getAttribute("d");
       if (!d) return true;
-      if (typeof document.createElementNS === 'function') {
-        const temp = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        if (typeof temp.getPathData === 'function') return true;
+      if (typeof document.createElementNS === "function") {
+        const temp = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path",
+        );
+        if (typeof temp.getPathData === "function") return true;
       }
       return translatePathDataFallback(d, 0, 0) !== null;
     }
@@ -650,10 +815,10 @@ export function collapseTransforms(svg: string) {
     if (dx === 0 && dy === 0) return true;
 
     const tag = el.tagName.toLowerCase();
-    if (tag === 'g' || tag === 'svg') {
+    if (tag === "g" || tag === "svg") {
       if (subtreeUsesUserSpacePaint(el)) return false;
       if (!canTranslate(el)) return false;
-      Array.from(el.children).forEach(child => {
+      Array.from(el.children).forEach((child) => {
         applyTranslate(child, dx, dy);
       });
       return true;
@@ -661,12 +826,12 @@ export function collapseTransforms(svg: string) {
 
     if (hasUserSpacePaint(el)) return false;
 
-    if (tag === 'path') {
-      const d = el.getAttribute('d');
+    if (tag === "path") {
+      const d = el.getAttribute("d");
       if (d) {
         const translated = translatePathData(d, dx, dy);
         if (translated) {
-          el.setAttribute('d', translated);
+          el.setAttribute("d", translated);
         } else {
           // Can't translate path reliably without path data API
           return false;
@@ -674,29 +839,29 @@ export function collapseTransforms(svg: string) {
       }
     }
 
-    if (el.hasAttribute('points')) {
-      const points = el.getAttribute('points');
+    if (el.hasAttribute("points")) {
+      const points = el.getAttribute("points");
       if (points) {
         const translated = applyTranslateToPoints(points, dx, dy);
-        el.setAttribute('points', translated);
+        el.setAttribute("points", translated);
       }
     }
 
-    const xAttrs = ['x', 'x1', 'x2', 'cx'];
-    const yAttrs = ['y', 'y1', 'y2', 'cy'];
+    const xAttrs = ["x", "x1", "x2", "cx"];
+    const yAttrs = ["y", "y1", "y2", "cy"];
 
-    xAttrs.forEach(attr => {
+    xAttrs.forEach((attr) => {
       if (el.hasAttribute(attr)) {
-        const val = parseFloat(el.getAttribute(attr) || '');
+        const val = parseFloat(el.getAttribute(attr) || "");
         if (Number.isFinite(val)) {
           el.setAttribute(attr, formatNumberCompact(val + dx));
         }
       }
     });
 
-    yAttrs.forEach(attr => {
+    yAttrs.forEach((attr) => {
       if (el.hasAttribute(attr)) {
-        const val = parseFloat(el.getAttribute(attr) || '');
+        const val = parseFloat(el.getAttribute(attr) || "");
         if (Number.isFinite(val)) {
           el.setAttribute(attr, formatNumberCompact(val + dy));
         }
@@ -709,13 +874,13 @@ export function collapseTransforms(svg: string) {
     return true;
   }
 
-  Array.from(doc.querySelectorAll('[transform]')).forEach(el => {
-    const transform = el.getAttribute('transform');
+  Array.from(doc.querySelectorAll("[transform]")).forEach((el) => {
+    const transform = el.getAttribute("transform");
     if (!transform) return;
     const extracted = extractTranslate(transform);
     if (extracted.rest) {
       // Only remove pure translate transforms
-      el.setAttribute('transform', transform);
+      el.setAttribute("transform", transform);
       return;
     }
 
@@ -725,9 +890,9 @@ export function collapseTransforms(svg: string) {
     }
 
     if (applied) {
-      el.removeAttribute('transform');
+      el.removeAttribute("transform");
     } else {
-      el.setAttribute('transform', transform);
+      el.setAttribute("transform", transform);
     }
   });
 
