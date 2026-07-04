@@ -2,7 +2,15 @@
 
 ![Advanced SVG Optimizer Social Preview](https://erikvullings.github.io/svgo/android-chrome-512x512.png)
 
-Advanced SVG Optimizer is a Mithril + SVGO web app.
+Advanced SVG Optimizer is a Mithril + SVGO web app, which adds several additional SVG optimizations on top of `svgo`, and it allows you to inspect the impact before accepting, such as:
+
+- Using fewer decimals for attributes and paths
+- Reorganizing text (manually) so grouping becomes more efficient
+- Removing `tspan` elements and styling
+- Converting Sodipodi arcs
+- Grouping similar elements (so you can share attributes)
+- Automatic cropping and resizing
+- Settings and last SVG are stored in local storage
 
 ## Live Demo
 
