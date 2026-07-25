@@ -15,6 +15,7 @@ type OptimizeOptions = {
   pathPrecision: number;
   removeTspan: boolean;
   removeStyling: boolean;
+  trimText: boolean;
   autoAutocrop: boolean;
   customWidth: number;
   customHeight: number;
@@ -43,6 +44,7 @@ type PersistedOptions = Pick<
   | "pathPrecision"
   | "removeTspan"
   | "removeStyling"
+  | "trimText"
   | "autoAutocrop"
   | "customWidth"
   | "customHeight"
@@ -100,6 +102,7 @@ class SVGOptimizer {
       pathPrecision: 2,
       removeTspan: true,
       removeStyling: true,
+      trimText: true,
       autoAutocrop: false,
       customWidth: 100,
       customHeight: 100,
@@ -168,6 +171,7 @@ class SVGOptimizer {
       pathPrecision: this.options.pathPrecision,
       removeTspan: this.options.removeTspan,
       removeStyling: this.options.removeStyling,
+      trimText: this.options.trimText,
       autoAutocrop: this.options.autoAutocrop,
       customWidth: this.options.customWidth,
       customHeight: this.options.customHeight,
@@ -229,6 +233,7 @@ class SVGOptimizer {
       raw.removeStyling,
       this.options.removeStyling,
     );
+    this.options.trimText = asBool(raw.trimText, this.options.trimText);
     this.options.autoAutocrop = asBool(
       raw.autoAutocrop,
       this.options.autoAutocrop,
@@ -313,6 +318,7 @@ class SVGOptimizer {
       this.options.removeFontSize ||
       this.options.removeTspan ||
       this.options.removeStyling ||
+      this.options.trimText ||
       this.options.convertSodipodiArcs ||
       this.options.autoAutocrop ||
       this.options.useCustomDimensions ||
@@ -1162,7 +1168,7 @@ class SVGOptimizer {
   }
 
   normalizeNamespaces(svg: string): string {
-    const cleaned = this.stripXmlDeclarations(svg);
+    const cleaned = this.stripXmlDeclarations(svg).replace(/\s+xmlns=(['"])\1/g, "");
     const hexFixed = this.fixInvalidHexColors(cleaned);
     const xlinkNormalized = this.normalizeXlinkHrefs(hexFixed);
     return this.stripUndeclaredNamespacedContent(xlinkNormalized);
@@ -1395,6 +1401,18 @@ class SVGOptimizer {
       });
     });
 
+    return new XMLSerializer().serializeToString(doc);
+  }
+
+  trimTextContent(svg: string): string {
+    const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+    if (doc.querySelector("parsererror")) return svg;
+
+    doc.querySelectorAll("text, tspan").forEach((element) => {
+      Array.from(element.childNodes).forEach((node) => {
+        if (node.nodeType === 3) node.textContent = (node.textContent ?? "").trim();
+      });
+    });
     return new XMLSerializer().serializeToString(doc);
   }
 
@@ -2432,6 +2450,10 @@ class SVGOptimizer {
 
       if (this.options.removeDefaultValues) {
         svg = this.removeDefaultValues(svg);
+      }
+
+      if (this.options.trimText) {
+        svg = this.trimTextContent(svg);
       }
 
       if (this.options.removeFontFamily || this.options.removeFontSize) {

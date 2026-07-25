@@ -125,7 +125,7 @@ const COMMON_ATTRIBUTE_SUGGESTIONS = [
 
 const ATTRIBUTE_SUGGESTIONS_BY_TAG = {
   svg: ["width", "height", "viewBox", "preserveAspectRatio"],
-  g: ["transform", "opacity"],
+  g: ["transform", "opacity", "text-anchor"],
   path: ["d", "pathLength"],
   rect: ["x", "y", "width", "height", "rx", "ry"],
   circle: ["cx", "cy", "r"],
@@ -240,6 +240,25 @@ const editingState: {
   selectedSuggestionIndex: 0,
   showSuggestionList: false,
 };
+
+const ATTRIBUTE_VALUE_SUGGESTIONS: Record<string, string[]> = {
+  "text-anchor": ["start", "middle", "end"],
+  "dominant-baseline": ["auto", "middle", "central", "hanging", "text-before-edge", "text-after-edge"],
+  "font-style": ["normal", "italic", "oblique"],
+  "font-weight": ["normal", "bold", "lighter", "bolder"],
+  "stroke-linecap": ["butt", "round", "square"],
+  "stroke-linejoin": ["miter", "round", "bevel"],
+  "fill-rule": ["nonzero", "evenodd"],
+  display: ["inline", "none"],
+};
+
+function getValueSuggestions(attrName: string): string[] {
+  return ATTRIBUTE_VALUE_SUGGESTIONS[attrName.toLowerCase()] ?? [];
+}
+
+function isColorAttribute(attrName: string): boolean {
+  return ["fill", "stroke", "stop-color", "color"].includes(attrName.toLowerCase());
+}
 
 function clearDragTarget() {
   dragOverPath = null;
@@ -773,7 +792,6 @@ function renderDirectAttributeValue(
   attr: Attr,
 ): m.Children {
   return m(".attr-value-container", [
-    m("span.attr-quote", '"'),
     m(UncontrolledInput, {
       className: "attr-value-direct",
       value: attr.value,
@@ -804,7 +822,6 @@ function renderDirectAttributeValue(
         updateAttributeValueLive(path, element, attr.name, nextValue);
       },
     }),
-    m("span.attr-quote", '"'),
   ]);
 }
 
@@ -912,6 +929,31 @@ function handleValueInputKeydown(e: KeyboardEvent): void {
   }
 }
 
+function renderValueSuggestions(): m.Children {
+  const suggestions = getValueSuggestions(editingState.nameInput);
+  if (editingState.field !== "value" || suggestions.length === 0) return null;
+
+  return m(
+    ".attr-suggestion-list.inline.value-suggestions",
+    suggestions.map((suggestion) =>
+      m(
+        "button.attr-suggestion-item",
+        {
+          type: "button",
+          onmousedown: (e: MouseEvent) => e.preventDefault(),
+          onclick: (e: MouseEvent) => {
+            e.stopPropagation();
+            editingState.valueInput = suggestion;
+            applyEditingValueLive(true);
+            focusEditingInput("value");
+          },
+        },
+        suggestion,
+      ),
+    ),
+  );
+}
+
 function renderAttributeEditor(
   path: string,
   attrName: string | null,
@@ -947,7 +989,16 @@ function renderAttributeEditor(
       editingState.field === "name" && renderInlineSuggestions(),
     ]),
     m("span.attr-separator", "="),
-    m("input.attr-value-input", {
+    m(".inline-edit-wrap", [
+      isColorAttribute(editingState.nameInput) &&
+        m("input[type=color].attr-color-input", {
+          value: getColorInputValue(editingState.valueInput),
+          oninput: (e: Event) => {
+            editingState.valueInput = (e.target as HTMLInputElement).value;
+            applyEditingValueLive(true);
+          },
+        }),
+    m(`input.attr-value-input${NUMERIC_ATTRS.has(editingState.nameInput.toLowerCase()) ? "[type=number]" : ""}`, {
       id: valueId,
       value: editingState.valueInput,
       placeholder: "value",
@@ -965,6 +1016,8 @@ function renderAttributeEditor(
       onkeydown: handleValueInputKeydown,
       onclick: (e: MouseEvent) => e.stopPropagation(),
     }),
+      renderValueSuggestions(),
+    ]),
   ]);
 }
 
@@ -1025,6 +1078,7 @@ const UncontrolledInput: m.Component<UncontrolledInputAttrs> = {
   view({ attrs }: Vnode<UncontrolledInputAttrs>) {
     return m("input.attr-value", {
       class: attrs.className,
+      type: attrs.type,
       ondblclick: attrs.onDoubleClick,
       onfocus: attrs.onFocus,
     });
@@ -1130,7 +1184,9 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
           m("span.tree-prefix", currentPrefix + ornament),
           m("span.tag-name", node.tagName),
           m(".attributes", [
-            ...Array.from(node.attributes).map((attr) =>
+            ...Array.from(node.attributes)
+              .filter((attr) => attr.name !== "xmlns")
+              .map((attr) =>
               editingState.path === path &&
               editingState.originalAttrName === attr.name
                 ? renderAttributeEditor(path, attr.name)
@@ -1139,6 +1195,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
                       "button.attr-name",
                       {
                         type: "button",
+                        tabindex: -1,
                         ondblclick: (e: MouseEvent) => {
                           e.stopPropagation();
                           startAttributeEditing(path, node, attr.name, "name");
@@ -1192,13 +1249,14 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
                             },
                             title: "Double-click to edit",
                           },
-                          `"${attr.value}"`,
+                          attr.value,
                         ),
                     attr.value.length > 50 && m(".attr-value-full", attr.value),
                     m(
                       "button.attr-remove",
                       {
                         title: `Remove ${attr.name}`,
+                        tabindex: -1,
                         onclick: (e) => {
                           e.stopPropagation();
                           node.removeAttribute(attr.name);
@@ -1213,23 +1271,31 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             editingState.isNew &&
             editingState.originalAttrName === null
               ? renderAttributeEditor(path, null)
-              : m(
-                  "button.attribute.attr-add-placeholder",
-                  {
-                    type: "button",
-                    onclick: (e: MouseEvent) => {
-                      e.stopPropagation();
-                      startAttributeEditing(path, node, null, "name");
-                    },
-                  },
-                  "+ Add Attribute",
-                ),
+              : null,
           ]),
           m(".node-controls", [
+            !(
+              editingState.path === path &&
+              editingState.isNew &&
+              editingState.originalAttrName === null
+            ) &&
+              m(
+                "button.control-btn",
+                {
+                  tabindex: -1,
+                  title: "Add attribute",
+                  onclick: (e: MouseEvent) => {
+                    e.stopPropagation();
+                    startAttributeEditing(path, node, null, "name");
+                  },
+                },
+                "+ attr",
+              ),
             canInsertChild &&
               m(
                 "button.control-btn",
                 {
+                  tabindex: -1,
                   title: "Insert child element",
                   onclick: (e: MouseEvent) => openElementMenu(path, "child", e),
                 },
@@ -1240,6 +1306,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               m(
                 "button.control-btn",
                 {
+                  tabindex: -1,
                   title: "Insert sibling element",
                   onclick: (e: MouseEvent) =>
                     openElementMenu(path, "sibling", e),
@@ -1255,6 +1322,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               m(
                 "button.control-btn",
                 {
+                  tabindex: -1,
                   title: "Round numeric attributes to 0 decimals",
                   onclick: (e) => {
                     e.stopPropagation();
@@ -1269,6 +1337,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               m(
                 "button.control-btn",
                 {
+                  tabindex: -1,
                   onclick: (e) => {
                     e.stopPropagation();
                     moveElement(path, -1);
@@ -1281,6 +1350,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
               m(
                 "button.control-btn",
                 {
+                  tabindex: -1,
                   onclick: (e) => {
                     e.stopPropagation();
                     moveElement(path, 1);
@@ -1292,6 +1362,7 @@ const TreeNode: m.Component<TreeNodeAttrs> = {
             m(
               "button.control-btn.danger",
               {
+                tabindex: -1,
                 onclick: (e) => {
                   e.stopPropagation();
                   node.remove();
@@ -1520,6 +1591,27 @@ function renderRemoveAttributeButton(
   );
 }
 
+function renderInspectorAttributeInput(element: Element, attr: Attr): m.Children {
+  const save = (value: string) =>
+    updateElementAttribute(element, attr.name, normalizeNumericAttrValue(attr.name, value));
+  const values = getValueSuggestions(attr.name);
+
+  if (isColorAttribute(attr.name)) {
+    return m(".property-color-value", [
+      m("input[type=color]", { value: getColorInputValue(attr.value), oninput: (e: Event) => save((e.target as HTMLInputElement).value) }),
+      m("input.property-text", { value: attr.value, onchange: (e: Event) => save((e.target as HTMLInputElement).value) }),
+    ]);
+  }
+  if (values.length > 0) {
+    return m("select.property-text", { value: attr.value, onchange: (e: Event) => save((e.target as HTMLSelectElement).value) }, values.map((value) => m("option", { value }, value)));
+  }
+  return m(`input.property-text${NUMERIC_ATTRS.has(attr.name.toLowerCase()) ? "[type=number]" : ""}`, {
+    value: normalizeNumericAttrValue(attr.name, attr.value),
+    step: NUMERIC_ATTRS.has(attr.name.toLowerCase()) ? String(getPrecisionStep(attr.name, attr.value)) : undefined,
+    onchange: (e: Event) => save((e.target as HTMLInputElement).value),
+  });
+}
+
 function renderPropertiesInspector(
   selectedElement: Element | null,
   fallbackSvg: Element,
@@ -1695,19 +1787,7 @@ function renderPropertiesInspector(
         filteredAttributes.map((attr) =>
           m(".property-row", [
             m("label", attr.name),
-            m("input.property-text", {
-              value: normalizeNumericAttrValue(attr.name, attr.value),
-              onchange: (e: Event) => {
-                updateElementAttribute(
-                  element,
-                  attr.name,
-                  normalizeNumericAttrValue(
-                    attr.name,
-                    (e.target as HTMLInputElement).value,
-                  ),
-                );
-              },
-            }),
+            renderInspectorAttributeInput(element, attr),
             m(
               "button.property-attr-remove",
               {

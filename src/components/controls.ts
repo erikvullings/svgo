@@ -48,6 +48,22 @@ export const Controls: m.Component<ControlsAttrs> = {
         m(".section-title", "Cleanup"),
         m(".checkbox-group", [
           m("input[type=checkbox]", {
+            id: "trim-text",
+            checked: optimizer.options.trimText,
+            onchange: (e: Event) => {
+              optimizer.options.trimText = (e.target as HTMLInputElement).checked;
+              optimizer.optimizeSvg();
+              optimizer.saveToHistory();
+            },
+          }),
+          m(
+            "label",
+            { for: "trim-text", title: "Removes leading and trailing whitespace. Disable this if that whitespace is intentional." },
+            "Trim text content (may change intentional spacing)",
+          ),
+        ]),
+        m(".checkbox-group", [
+          m("input[type=checkbox]", {
             id: "convert-sodipodi",
             checked: optimizer.options.convertSodipodiArcs,
             onchange: (e: Event) => {

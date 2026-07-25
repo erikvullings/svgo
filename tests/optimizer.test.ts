@@ -112,6 +112,18 @@ describe("removeDefaultValues", () => {
   });
 });
 
+describe("text and namespace cleanup", () => {
+  it("removes empty xmlns declarations", () => {
+    const optimizer = new SVGOptimizer();
+    expect(optimizer.normalizeNamespaces('<svg xmlns="http://www.w3.org/2000/svg"><g xmlns=""/></svg>')).not.toContain('xmlns=""');
+  });
+
+  it("trims text and tspan content", () => {
+    const optimizer = new SVGOptimizer();
+    expect(optimizer.trimTextContent('<svg xmlns="http://www.w3.org/2000/svg"><text>  Hello  <tspan> world </tspan>  </text></svg>')).toContain('<text>Hello<tspan>world</tspan></text>');
+  });
+});
+
 describe("moveTextElementsToEnd", () => {
   it("moves all text elements into a trailing group in original order", () => {
     const input =
