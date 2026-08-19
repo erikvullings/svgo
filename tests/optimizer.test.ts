@@ -122,6 +122,84 @@ describe("text and namespace cleanup", () => {
     const optimizer = new SVGOptimizer();
     expect(optimizer.trimTextContent('<svg xmlns="http://www.w3.org/2000/svg"><text>  Hello  <tspan> world </tspan>  </text></svg>')).toContain('<text>Hello<tspan>world</tspan></text>');
   });
+
+  it("removes xml:space=preserve from text with no whitespace", () => {
+    const optimizer = new SVGOptimizer();
+    const output = optimizer.removeDefaultValues(
+      '<svg xmlns="http://www.w3.org/2000/svg"><text xml:space="preserve">Hello</text></svg>',
+    );
+    expect(output).not.toContain("xml:space");
+  });
+
+  it("keeps xml:space=preserve on text with meaningful whitespace", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><text xml:space="preserve">Hello  World</text></svg>';
+    const output = optimizer.removeDefaultValues(input);
+    expect(output).toContain('xml:space="preserve"');
+  });
+
+  it("does not trim text with xml:space=preserve", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><text xml:space="preserve">  Hello  World  </text></svg>';
+    expect(optimizer.trimTextContent(input)).toContain(">  Hello  World  <");
+  });
+
+  it("leaves multi-tspan text elements untouched", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><text xml:space="preserve">' +
+      '<tspan>  Hi  </tspan><tspan>  There  </tspan></text></svg>';
+    expect(optimizer.trimTextContent(input)).toContain(input.match(/<text[^]*<\/text>/)![0]);
+    const withoutPreserve = optimizer.removeDefaultValues(input);
+    expect(withoutPreserve).toContain('xml:space="preserve"');
+  });
+});
+
+describe("groupSimilarElementsByType for text", () => {
+  it("groups consecutive text elements sharing font-size and fill", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<text font-size="12" fill="#333">A</text>' +
+      '<text font-size="12" fill="#333">B</text>' +
+      '<text font-size="12" fill="#333">C</text>' +
+      "</svg>";
+    const output = optimizer.groupSimilarElementsByType(input);
+    expect(output).toContain("<g");
+    expect(output).toContain('font-size="12"');
+    expect(output).toContain('fill="#333"');
+    expect(output).toContain("<text>A</text><text>B</text><text>C</text>");
+    expect((output.match(/font-size="12"/g) || []).length).toBe(1);
+  });
+
+  it("reorders non-adjacent text elements sharing attributes into one group", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<text font-size="12" fill="#333">A</text>' +
+      '<rect width="1" height="1"/>' +
+      '<text font-size="10" fill="#000">X</text>' +
+      '<text font-size="12" fill="#333">B</text>' +
+      '<text font-size="12" fill="#333">C</text>' +
+      "</svg>";
+    const output = optimizer.groupSimilarElementsByType(input);
+    expect(output).toContain("<text>A</text><text>B</text><text>C</text>");
+    expect((output.match(/<g/g) || []).length).toBe(1);
+    expect(output).toContain('<text font-size="10" fill="#000">X</text>');
+  });
+
+  it("does not group text elements with differing attributes", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<text font-size="12" fill="#333">A</text>' +
+      '<text font-size="14" fill="#000">B</text>' +
+      "</svg>";
+    const output = optimizer.groupSimilarElementsByType(input);
+    expect(output).not.toContain("<g");
+  });
 });
 
 describe("moveTextElementsToEnd", () => {

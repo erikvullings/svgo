@@ -1250,6 +1250,20 @@ class SVGOptimizer {
       return /^[-+]?0*\.?0+(?:e[-+]?\d+)?(?:[a-z%]+)?$/i.test(value.trim());
     };
 
+    // xml:space="preserve" only matters when it actually protects meaningful
+    // whitespace. Text with multiple tspans is left untouched entirely (too
+    // fragile to reason about which whitespace matters).
+    const elementRequiresXmlSpacePreserve = (el: Element): boolean => {
+      const tagName = (el.localName || el.tagName).toLowerCase();
+      if (tagName === "text") {
+        if (el.querySelectorAll("tspan").length > 1) return true;
+        return /\s/.test(el.textContent ?? "");
+      }
+      return Array.from(el.querySelectorAll("text")).some((textEl) =>
+        elementRequiresXmlSpacePreserve(textEl),
+      );
+    };
+
     const defaultValues = {
       "letter-spacing": ["0", "normal"],
       "word-spacing": ["0", "normal"],
@@ -1325,6 +1339,7 @@ class SVGOptimizer {
             return;
           }
           if (attr === "xml:space") {
+            if (elementRequiresXmlSpacePreserve(el)) return;
             el.removeAttribute("xml:space");
             el.removeAttributeNS(
               "http://www.w3.org/XML/1998/namespace",
@@ -1408,10 +1423,26 @@ class SVGOptimizer {
     const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
     if (doc.querySelector("parsererror")) return svg;
 
-    doc.querySelectorAll("text, tspan").forEach((element) => {
-      Array.from(element.childNodes).forEach((node) => {
-        if (node.nodeType === 3) node.textContent = (node.textContent ?? "").trim();
-      });
+    const XML_NS = "http://www.w3.org/XML/1998/namespace";
+    const getXmlSpace = (el: Element): string | null =>
+      el.getAttribute("xml:space") ?? el.getAttributeNS(XML_NS, "space");
+
+    doc.querySelectorAll("text").forEach((textEl) => {
+      // Multiple tspans are too fragile to reason about — leave untouched.
+      if (textEl.querySelectorAll("tspan").length > 1) return;
+      // xml:space="preserve" means whitespace is significant — don't trim.
+      if (getXmlSpace(textEl) === "preserve") return;
+
+      const trimChildText = (el: Element): void => {
+        Array.from(el.childNodes).forEach((node) => {
+          if (node.nodeType === 3) {
+            node.textContent = (node.textContent ?? "").trim();
+          }
+        });
+      };
+      trimChildText(textEl);
+      const tspan = textEl.querySelector("tspan");
+      if (tspan) trimChildText(tspan);
     });
     return new XMLSerializer().serializeToString(doc);
   }
@@ -1708,6 +1739,62 @@ class SVGOptimizer {
     });
   }
 
+  /**
+   * Groups <text> siblings that share the same typography/presentation
+   * attributes, even when they aren't adjacent. Unlike shapes, text
+   * elements don't stack visually, so reordering them to sit together
+   * doesn't change how the SVG renders.
+   */
+  groupTextElementsByAttributes(
+    doc: Document,
+    groupableAttributes: string[],
+  ): void {
+    const parents = new Set<Element>();
+    doc.querySelectorAll("text").forEach((el) => {
+      if (el.parentElement) parents.add(el.parentElement);
+    });
+
+    parents.forEach((parent) => {
+      const textChildren = Array.from(parent.children).filter(
+        (el) => el.tagName.toLowerCase() === "text",
+      ) as Element[];
+      if (textChildren.length < 2) return;
+
+      const buckets = new Map<
+        string,
+        { attrs: Record<string, string>; elements: Element[] }
+      >();
+
+      textChildren.forEach((el) => {
+        const attrs = this.getGroupableAttributes(el, groupableAttributes);
+        if (Object.keys(attrs).length === 0) return;
+        const signature = JSON.stringify(attrs);
+        if (!buckets.has(signature)) {
+          buckets.set(signature, { attrs, elements: [] });
+        }
+        buckets.get(signature)?.elements.push(el);
+      });
+
+      buckets.forEach(({ attrs, elements }) => {
+        if (elements.length < 2) return;
+        const savings = this.estimateGroupSavings(attrs, elements.length);
+        if (savings <= 0) return;
+
+        const SVG_NS = "http://www.w3.org/2000/svg";
+        const group = parent.ownerDocument.createElementNS(SVG_NS, "g");
+        Object.entries(attrs).forEach(([attr, value]) => {
+          group.setAttribute(attr, value);
+        });
+
+        parent.insertBefore(group, elements[0]);
+        elements.forEach((el) => {
+          Object.keys(attrs).forEach((attr) => el.removeAttribute(attr));
+          group.appendChild(el);
+        });
+      });
+    });
+  }
+
   groupSimilarElementsByType(svg: string): string {
     const parser = new DOMParser();
     const doc = parser.parseFromString(svg, "image/svg+xml");
@@ -1744,6 +1831,28 @@ class SVGOptimizer {
       elementTypes,
       groupableAttributes,
     );
+
+    // Text elements share a different set of meaningful presentation
+    // attributes (typography), so group them separately from shapes.
+    const textGroupableAttributes = [
+      "fill",
+      "font-family",
+      "font-size",
+      "font-weight",
+      "font-style",
+      "font-variant",
+      "text-anchor",
+      "dominant-baseline",
+      "letter-spacing",
+      "word-spacing",
+      "opacity",
+      "fill-opacity",
+      "stroke",
+      "stroke-width",
+      "stroke-opacity",
+    ];
+
+    this.groupTextElementsByAttributes(doc, textGroupableAttributes);
 
     return new XMLSerializer().serializeToString(doc);
   }
