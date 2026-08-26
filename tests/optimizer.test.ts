@@ -200,7 +200,26 @@ describe("groupSimilarElementsByType for text", () => {
     const output = optimizer.groupSimilarElementsByType(input);
     expect(output).not.toContain("<g");
   });
+
+  it("groups text elements on shared attributes even when other attributes differ", () => {
+    const optimizer = new SVGOptimizer();
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<text font-size="12" fill="#333" stroke="#000">A</text>' +
+      '<text font-size="12" fill="#333" stroke-width="2">B</text>' +
+      '<text font-size="12" fill="#333">C</text>' +
+      "</svg>";
+    const output = optimizer.groupSimilarElementsByType(input);
+    expect(output).toContain("<g");
+    expect(output).toContain('font-size="12"');
+    expect(output).toContain('fill="#333"');
+    expect((output.match(/<g/g) || []).length).toBe(1);
+    expect(output).toContain('<text stroke="#000">A</text>');
+    expect(output).toContain('<text stroke-width="2">B</text>');
+    expect(output).toContain("<text>C</text>");
+  });
 });
+
 
 describe("moveTextElementsToEnd", () => {
   it("moves all text elements into a trailing group in original order", () => {

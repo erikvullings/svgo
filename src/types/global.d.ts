@@ -45,3 +45,17 @@ interface RequireLike {
 declare const require: RequireLike;
 declare const monaco: MonacoApi;
 declare function acquireVsCodeApi(): { postMessage: (message: unknown) => void } | undefined;
+
+interface FileSystemFileHandle {
+  createWritable: () => Promise<{
+    write: (data: BlobPart) => Promise<void>;
+    close: () => Promise<void>;
+  }>;
+}
+
+interface Window {
+  showSaveFilePicker?: (options?: {
+    suggestedName?: string;
+    types?: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<FileSystemFileHandle>;
+}

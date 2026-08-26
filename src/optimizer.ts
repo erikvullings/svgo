@@ -1760,36 +1760,74 @@ class SVGOptimizer {
       ) as Element[];
       if (textChildren.length < 2) return;
 
-      const buckets = new Map<
-        string,
-        { attrs: Record<string, string>; elements: Element[] }
-      >();
+      const grouped = new Set<Element>();
 
-      textChildren.forEach((el) => {
-        const attrs = this.getGroupableAttributes(el, groupableAttributes);
-        if (Object.keys(attrs).length === 0) return;
-        const signature = JSON.stringify(attrs);
-        if (!buckets.has(signature)) {
-          buckets.set(signature, { attrs, elements: [] });
+      textChildren.forEach((anchor, i) => {
+        if (grouped.has(anchor)) return;
+
+        const anchorAttrs = this.getGroupableAttributes(
+          anchor,
+          groupableAttributes,
+        );
+        if (Object.keys(anchorAttrs).length === 0) return;
+
+        // Greedily accumulate the largest common attribute subset across any
+        // (not necessarily adjacent) remaining text siblings — text doesn't
+        // stack visually, so partial matches (e.g. shared font-size/fill but
+        // differing stroke) can still be grouped on their shared attributes.
+        let currentCommon = { ...anchorAttrs };
+        const candidates: Element[] = [anchor];
+        let bestGroup: {
+          elements: Element[];
+          attrs: Record<string, string>;
+          savings: number;
+        } | null = null;
+
+        for (let j = i + 1; j < textChildren.length; j++) {
+          const candidate = textChildren[j];
+          if (grouped.has(candidate)) continue;
+
+          const candidateAttrs = this.getGroupableAttributes(
+            candidate,
+            groupableAttributes,
+          );
+          const nextCommon = this.intersectGroupableAttributes(
+            currentCommon,
+            candidateAttrs,
+          );
+          if (Object.keys(nextCommon).length === 0) continue;
+
+          currentCommon = nextCommon;
+          candidates.push(candidate);
+
+          const savings = this.estimateGroupSavings(
+            currentCommon,
+            candidates.length,
+          );
+          if (savings > 0 && (!bestGroup || savings > bestGroup.savings)) {
+            bestGroup = {
+              elements: [...candidates],
+              attrs: { ...currentCommon },
+              savings,
+            };
+          }
         }
-        buckets.get(signature)?.elements.push(el);
-      });
 
-      buckets.forEach(({ attrs, elements }) => {
-        if (elements.length < 2) return;
-        const savings = this.estimateGroupSavings(attrs, elements.length);
-        if (savings <= 0) return;
+        if (!bestGroup) return;
 
         const SVG_NS = "http://www.w3.org/2000/svg";
         const group = parent.ownerDocument.createElementNS(SVG_NS, "g");
-        Object.entries(attrs).forEach(([attr, value]) => {
+        Object.entries(bestGroup.attrs).forEach(([attr, value]) => {
           group.setAttribute(attr, value);
         });
 
-        parent.insertBefore(group, elements[0]);
-        elements.forEach((el) => {
-          Object.keys(attrs).forEach((attr) => el.removeAttribute(attr));
+        parent.insertBefore(group, bestGroup.elements[0]);
+        bestGroup.elements.forEach((el) => {
+          Object.keys(bestGroup.attrs).forEach((attr) =>
+            el.removeAttribute(attr),
+          );
           group.appendChild(el);
+          grouped.add(el);
         });
       });
     });
@@ -2630,11 +2668,31 @@ class SVGOptimizer {
     }
   }
 
-  downloadSvg(): void {
+  async downloadSvg(): Promise<void> {
     const svg = this.getPreviewSvg();
     if (!svg) return;
 
     const blob = new Blob([svg], { type: "image/svg+xml" });
+
+    if (typeof window.showSaveFilePicker === "function") {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: "optimized.svg",
+          types: [
+            { description: "SVG image", accept: { "image/svg+xml": [".svg"] } },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        return;
+      } catch (error) {
+        // AbortError means the user cancelled the picker — do nothing.
+        if ((error as { name?: string })?.name === "AbortError") return;
+        console.warn("showSaveFilePicker failed, falling back to download:", error);
+      }
+    }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

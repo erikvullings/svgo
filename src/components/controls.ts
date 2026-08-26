@@ -59,7 +59,7 @@ export const Controls: m.Component<ControlsAttrs> = {
           m(
             "label",
             { for: "trim-text", title: "Removes leading and trailing whitespace. Disable this if that whitespace is intentional." },
-            "Trim text content (may change intentional spacing)",
+            "Trim text content",
           ),
         ]),
         m(".checkbox-group", [
@@ -179,7 +179,7 @@ export const Controls: m.Component<ControlsAttrs> = {
           m(
             "label",
             { for: "group-text-elements-end" },
-            "Move all text elements to end",
+            "Move text to end",
           ),
         ]),
         m(".checkbox-group", [
