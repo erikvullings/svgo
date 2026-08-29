@@ -293,6 +293,58 @@ describe("moveTextElementsToEnd", () => {
 });
 
 describe("optimizeSvg", () => {
+  it("treats zero precision as an enabled optimization", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="M10.4 20.6l2.2 3.3"/></svg>';
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.precision = 0;
+    optimizer.options.pathPrecision = 0;
+    optimizer.options.trimText = false;
+    optimizer.options.convertSodipodiArcs = false;
+    optimizer.options.removeDefaultValues = false;
+    optimizer.options.removeFontFamily = false;
+    optimizer.options.removeFontSize = false;
+    optimizer.options.removeTspan = false;
+    optimizer.options.removeStyling = false;
+    optimizer.options.groupSimilarElements = false;
+    optimizer.options.groupTextElementsAtEnd = false;
+    optimizer.options.autoAutocrop = false;
+    optimizer.options.useCustomDimensions = false;
+
+    expect(optimizer.isOptimizationEnabled()).toBe(true);
+    await optimizer.optimizeSvg();
+    expect(optimizer.optimizedSvg).toContain('d="m10 21 2 3"');
+  });
+
+  it("does not change an SVG without sodipodi arcs when arc conversion is toggled", async () => {
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = readFileSync(
+      "tests/examples/marker-arrow.svg",
+      "utf8",
+    );
+    optimizer.options.precision = 0;
+    optimizer.options.pathPrecision = 0;
+    optimizer.options.trimText = false;
+    optimizer.options.convertSodipodiArcs = false;
+    optimizer.options.removeDefaultValues = false;
+    optimizer.options.removeFontFamily = false;
+    optimizer.options.removeFontSize = false;
+    optimizer.options.removeTspan = false;
+    optimizer.options.removeStyling = false;
+    optimizer.options.groupSimilarElements = false;
+    optimizer.options.groupTextElementsAtEnd = false;
+    optimizer.options.autoAutocrop = false;
+    optimizer.options.useCustomDimensions = false;
+
+    await optimizer.optimizeSvg();
+    const withoutArcConversion = optimizer.optimizedSvg;
+    optimizer.options.convertSodipodiArcs = true;
+    await optimizer.optimizeSvg();
+
+    expect(optimizer.optimizedSvg).toBe(withoutArcConversion);
+  });
+
   it("removes ns2 namespace after optimization", async () => {
     const input =
       '<svg xmlns="http://www.w3.org/2000/svg" xmlns:ns2="http://ns.adobe.com/AdobeIllustrator/10.0/" ns2:viewOrigin="0 0" ns2:rulerOrigin="0 0" ns2:pageBounds="0 360 360 0">' +

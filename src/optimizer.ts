@@ -311,7 +311,7 @@ class SVGOptimizer {
 
   isOptimizationEnabled(): boolean {
     const hasRounding =
-      this.options.precision > 0 || this.options.pathPrecision > 0;
+      this.options.precision >= 0 || this.options.pathPrecision >= 0;
     const hasToggles =
       this.options.removeDefaultValues ||
       this.options.removeFontFamily ||
