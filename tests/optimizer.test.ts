@@ -292,6 +292,58 @@ describe("moveTextElementsToEnd", () => {
   });
 });
 
+describe("autocropSvg", () => {
+  it("crops a vertical path whose geometric bounding box has zero width", () => {
+    const svgPrototype = SVGElement.prototype as typeof SVGElement.prototype & {
+      getBBox: () => DOMRect;
+    };
+    const originalGetBBox = svgPrototype.getBBox;
+    svgPrototype.getBBox = () =>
+      ({ x: 33.4, y: 13.8, width: 0, height: 2.8 }) as DOMRect;
+
+    try {
+      const optimizer = new SVGOptimizer();
+      const input =
+        '<svg viewBox="0 0 156.8 16.9"><path stroke="red" stroke-width=".6" d="m33.4 16.6 0 -2.8"/></svg>';
+      const output = optimizer.autocropSvg(input, 3);
+      const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+
+      expect(doc.documentElement.getAttribute("viewBox")).toBe("30 10 7 10");
+    } finally {
+      svgPrototype.getBBox = originalGetBBox;
+    }
+  });
+
+  it("includes referenced marker geometry in the cropped viewBox", () => {
+    const svgPrototype = SVGElement.prototype as typeof SVGElement.prototype & {
+      getBBox: () => DOMRect;
+    };
+    const originalGetBBox = svgPrototype.getBBox;
+    svgPrototype.getBBox = function () {
+      if (this.hasAttribute("data-autocrop-marker-content")) {
+        return { x: -2.5, y: -2.5, width: 8.8, height: 5 } as DOMRect;
+      }
+      return { x: 33.4, y: 13.8, width: 0, height: 2.8 } as DOMRect;
+    };
+
+    try {
+      const optimizer = new SVGOptimizer();
+      const input =
+        '<svg viewBox="0 0 156.8 16.9">' +
+        '<defs><marker id="a" markerWidth="1" markerHeight="1" viewBox="0 0 1 1">' +
+        '<path d="m0 0 -2.5 2.5L6.3 0 -2.5 -2.5z"/></marker></defs>' +
+        '<path stroke="red" stroke-width=".6" marker-end="url(#a)" d="m33.4 16.6 0 -2.8"/>' +
+        "</svg>";
+      const output = optimizer.autocropSvg(input, 3);
+      const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+
+      expect(doc.documentElement.getAttribute("viewBox")).toBe("26 6 15 18");
+    } finally {
+      svgPrototype.getBBox = originalGetBBox;
+    }
+  });
+});
+
 describe("optimizeSvg", () => {
   it("treats zero precision as an enabled optimization", async () => {
     const input =

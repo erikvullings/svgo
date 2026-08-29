@@ -2239,6 +2239,108 @@ class SVGOptimizer {
     }
 
     try {
+      const calculateMarkerPadding = (): number => {
+        const markerAttrs = ["marker-start", "marker-mid", "marker-end"];
+        const markerElements = Array.from(
+          svgElement.querySelectorAll("marker[id]"),
+        );
+        let padding = 0;
+
+        svgElement
+          .querySelectorAll(
+            markerAttrs.map((attr) => `[${attr}]`).join(","),
+          )
+          .forEach((referencingElement) => {
+            markerAttrs.forEach((attr) => {
+              const markerRef = referencingElement.getAttribute(attr);
+              const markerId = markerRef?.match(
+                /^url\(\s*['"]?#([^'")\s]+)['"]?\s*\)$/,
+              )?.[1];
+              if (!markerId) return;
+
+              const marker = markerElements.find(
+                (candidate) => candidate.getAttribute("id") === markerId,
+              );
+              if (!marker) return;
+
+              const markerContent = document.createElementNS(
+                "http://www.w3.org/2000/svg",
+                "g",
+              );
+              markerContent.setAttribute("data-autocrop-marker-content", "");
+              Array.from(marker.children).forEach((child) => {
+                markerContent.appendChild(child.cloneNode(true));
+              });
+              svgElement.appendChild(markerContent);
+
+              let markerBBox: DOMRect;
+              try {
+                markerBBox = markerContent.getBBox();
+              } finally {
+                markerContent.remove();
+              }
+
+              const viewBox = (marker.getAttribute("viewBox") || "")
+                .trim()
+                .split(/[\s,]+/)
+                .map(Number);
+              const hasViewBox =
+                viewBox.length === 4 &&
+                viewBox.every(Number.isFinite) &&
+                viewBox[2] > 0 &&
+                viewBox[3] > 0;
+              const markerWidth =
+                this.parseSvgLength(marker.getAttribute("markerWidth"), 3) ||
+                3;
+              const markerHeight =
+                this.parseSvgLength(marker.getAttribute("markerHeight"), 3) ||
+                3;
+
+              let scaleX = 1;
+              let scaleY = 1;
+              let refX = parseFloat(marker.getAttribute("refX") || "0") || 0;
+              let refY = parseFloat(marker.getAttribute("refY") || "0") || 0;
+              if (hasViewBox) {
+                scaleX = markerWidth / viewBox[2];
+                scaleY = markerHeight / viewBox[3];
+                const preserveAspectRatio =
+                  marker.getAttribute("preserveAspectRatio") || "xMidYMid meet";
+                if (!/\bnone\b/.test(preserveAspectRatio)) {
+                  const uniformScale = /\bslice\b/.test(preserveAspectRatio)
+                    ? Math.max(scaleX, scaleY)
+                    : Math.min(scaleX, scaleY);
+                  scaleX = uniformScale;
+                  scaleY = uniformScale;
+                }
+              }
+
+              const markerUnitScale =
+                marker.getAttribute("markerUnits") === "userSpaceOnUse"
+                  ? 1
+                  : parseFloat(
+                      referencingElement.getAttribute("stroke-width") ||
+                        getComputedStyle(referencingElement).strokeWidth ||
+                        "1",
+                    ) || 1;
+              const maxXDistance = Math.max(
+                Math.abs(markerBBox.x - refX),
+                Math.abs(markerBBox.x + markerBBox.width - refX),
+              );
+              const maxYDistance = Math.max(
+                Math.abs(markerBBox.y - refY),
+                Math.abs(markerBBox.y + markerBBox.height - refY),
+              );
+              const markerRadius = Math.hypot(
+                maxXDistance * scaleX,
+                maxYDistance * scaleY,
+              );
+              padding = Math.max(padding, markerRadius * markerUnitScale);
+            });
+          });
+
+        return padding;
+      };
+
       // Get the bounding box of the entire SVG content
       // This method accounts for all visible elements.
       // It returns an SVGRect which has x, y, width, height.
@@ -2295,11 +2397,12 @@ class SVGOptimizer {
         }
       }
 
+      const markerPadding = calculateMarkerPadding();
       return {
-        x: bbox.x,
-        y: bbox.y,
-        width: bbox.width,
-        height: bbox.height,
+        x: bbox.x - markerPadding,
+        y: bbox.y - markerPadding,
+        width: bbox.width + markerPadding * 2,
+        height: bbox.height + markerPadding * 2,
       };
     } catch (e) {
       console.error("Error calculating SVG bounding box:", e);
@@ -2433,7 +2536,10 @@ class SVGOptimizer {
     }
 
     const contentBBox = this.calculateContentBBox(svg);
-    if (!contentBBox || contentBBox.width <= 0 || contentBBox.height <= 0) {
+    if (
+      !contentBBox ||
+      (contentBBox.width <= 0 && contentBBox.height <= 0)
+    ) {
       console.warn(
         "Could not calculate content BBox for autocrop. Leaving SVG unchanged.",
       );
