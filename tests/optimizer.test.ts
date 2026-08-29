@@ -405,6 +405,30 @@ describe("optimizeSvg", () => {
     expect(output).not.toContain("parsererror");
   });
 
+  it("keeps a translated marker arrow inside its viewBox", async () => {
+    const input = readFileSync("tests/examples/marker-arrow.svg", "utf8");
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.precision = 4;
+    optimizer.options.pathPrecision = 4;
+    optimizer.options.trimText = false;
+    optimizer.options.convertSodipodiArcs = false;
+    optimizer.options.removeDefaultValues = false;
+    optimizer.options.removeTspan = false;
+    optimizer.options.removeStyling = false;
+    optimizer.options.groupSimilarElements = false;
+    await optimizer.optimizeSvg();
+
+    const doc = new DOMParser().parseFromString(
+      optimizer.optimizedSvg,
+      "image/svg+xml",
+    );
+    const path = doc.querySelector("path[marker-end]");
+    expect(path?.hasAttribute("transform")).toBe(false);
+    expect(path?.getAttribute("d")).toMatch(/^M33\.442 16\.611/);
+    expect(path?.getAttribute("d")).toMatch(/l-?\.026\s+-2\.847/);
+  });
+
   it("preserves marker arrowheads when re-optimizing already-optimized SVG", async () => {
     const input = readFileSync("tests/examples/measurements.svg", "utf8");
     const optimizer = new SVGOptimizer();

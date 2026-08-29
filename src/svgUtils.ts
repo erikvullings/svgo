@@ -592,22 +592,36 @@ export function translatePathDataFallback(
           if (isAbs) {
             const nx = chunk[0] + dx;
             const ny = chunk[1] + dy;
-            out.push("M", formatNumberCompact(nx), formatNumberCompact(ny));
+            out.push(
+              n === 0 ? "M" : "L",
+              formatNumberCompact(nx),
+              formatNumberCompact(ny),
+            );
             currentX = chunk[0];
             currentY = chunk[1];
-            subStartX = chunk[0];
-            subStartY = chunk[1];
+            if (n === 0) {
+              subStartX = chunk[0];
+              subStartY = chunk[1];
+            }
           } else {
             if (firstCommand) {
               out.push(
                 "M",
-                formatNumberCompact(chunk[0]),
-                formatNumberCompact(chunk[1]),
+                formatNumberCompact(chunk[0] + dx),
+                formatNumberCompact(chunk[1] + dy),
               );
               currentX = chunk[0];
               currentY = chunk[1];
               subStartX = chunk[0];
               subStartY = chunk[1];
+            } else if (n > 0) {
+              out.push(
+                "l",
+                formatNumberCompact(chunk[0]),
+                formatNumberCompact(chunk[1]),
+              );
+              currentX += chunk[0];
+              currentY += chunk[1];
             } else {
               out.push(
                 "m",

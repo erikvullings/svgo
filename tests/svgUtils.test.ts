@@ -51,6 +51,19 @@ describe("roundNumericValueFixed with fractional-sensitive safety", () => {
 });
 
 describe("collapseTransforms", () => {
+  it("applies translation to an initial relative moveto", () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="m45.176 125.38-.026-2.847" transform="translate(-11.734 -108.769)"/></svg>';
+    const output = collapseTransforms(input);
+    const doc = new DOMParser().parseFromString(output, "image/svg+xml");
+    const path = doc.querySelector("path");
+
+    expect(path?.getAttribute("transform")).toBeNull();
+    expect(path?.getAttribute("d")).toBe(
+      "M 33.442 16.61099999999999 l -.026 -2.847",
+    );
+  });
+
   it("keeps transforms when userSpaceOnUse gradients are referenced", () => {
     const input =
       '<svg xmlns="http://www.w3.org/2000/svg">' +
