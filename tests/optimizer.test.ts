@@ -364,6 +364,24 @@ describe("optimizeSvg", () => {
     expect(output).toContain('r="5"');
   });
 
+  it("preserves a non-zero path segment at 0 path precision", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg"><path d="m 45.175923,125.37949 -0.0256,-0.04605"/></svg>';
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.precision = 0;
+    optimizer.options.pathPrecision = 0;
+    await optimizer.optimizeSvg();
+
+    const doc = new DOMParser().parseFromString(
+      optimizer.optimizedSvg,
+      "image/svg+xml",
+    );
+    const pathData = doc.querySelector("path")?.getAttribute("d");
+    expect(pathData).toBeTruthy();
+    expect(pathData).toBe("m45 125 -.03 -.05");
+  });
+
   it("preserves marker arrowheads for arrows example", async () => {
     const input = readFileSync("tests/examples/arrows.svg", "utf8");
     const optimizer = new SVGOptimizer();
@@ -433,5 +451,40 @@ describe("optimizeSvg", () => {
       (el) => (el.textContent || "").trim(),
     );
     expect(textValues).toEqual(["A", "B"]);
+  });
+
+  it("preserves grouped text attributes when moving text to the end", async () => {
+    const input =
+      '<svg xmlns="http://www.w3.org/2000/svg">' +
+      '<text font-size="12" fill="#333">A</text>' +
+      '<rect width="1" height="1"/>' +
+      '<text font-size="14" fill="#000">X</text>' +
+      '<text font-size="12" fill="#333">B</text>' +
+      '<text font-size="12" fill="#333">C</text>' +
+      "</svg>";
+    const optimizer = new SVGOptimizer();
+    optimizer.originalSvg = input;
+    optimizer.options.groupTextElementsAtEnd = true;
+    await optimizer.optimizeSvg();
+
+    const doc = new DOMParser().parseFromString(
+      optimizer.optimizedSvg,
+      "image/svg+xml",
+    );
+    const root = doc.querySelector("svg");
+    const trailingGroup = root?.lastElementChild;
+    expect(trailingGroup?.tagName.toLowerCase()).toBe("g");
+
+    const sharedAttributeGroup = trailingGroup?.querySelector(
+      'g[font-size="12"][fill="#333"]',
+    );
+    const groupedTexts = Array.from(
+      sharedAttributeGroup?.children ?? [],
+    ).map((el) => el.textContent);
+    expect(groupedTexts).toEqual(["A", "B", "C"]);
+    expect(sharedAttributeGroup).toBeTruthy();
+    expect((optimizer.optimizedSvg.match(/font-size="12"/g) || []).length).toBe(
+      1,
+    );
   });
 });

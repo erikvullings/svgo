@@ -12,6 +12,15 @@ describe("roundPathData", () => {
     const output = roundPathData(input, 0);
     expect(output).toBe("M109 124V33l-69 0v91z");
   });
+
+  it("does not collapse a non-zero relative line to a point", () => {
+    const input = "m45.175923 125.37949-.0256-.04605";
+    const output = roundPathData(input, 0);
+    expect(output).toBe("m45 125 -.03 -.05");
+    expect(roundPathData("m45.175923 125.37949-.0256-2.84605", 0)).toBe(
+      "m45 125 0 -3",
+    );
+  });
 });
 
 describe("roundNumericValueFixed with fractional-sensitive safety", () => {

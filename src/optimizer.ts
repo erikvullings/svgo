@@ -2619,6 +2619,10 @@ class SVGOptimizer {
         svg = this.removeStyling(svg);
       }
 
+      if (this.options.groupTextElementsAtEnd) {
+        svg = this.moveTextElementsToEnd(svg);
+      }
+
       if (this.options.groupSimilarElements) {
         // Group similar elements only (disable aggressive path combining for now)
         svg = this.groupSimilarElementsByType(svg);
@@ -2631,10 +2635,6 @@ class SVGOptimizer {
 
       // Remove stroke attributes from text elements
       svg = this.removeStrokeFromText(svg);
-
-      if (this.options.groupTextElementsAtEnd) {
-        svg = this.moveTextElementsToEnd(svg);
-      }
 
       // Merge simple path-only groups and collapse groups with a single child
       svg = this.mergePathsAndCollapseGroups(svg);

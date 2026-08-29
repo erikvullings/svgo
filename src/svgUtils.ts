@@ -313,6 +313,99 @@ export function roundPathData(value: string, precision: number) {
 
   if (tokens.length === 0) return value;
 
+  const originalValues = tokens.map((token) => token.value);
+  tokens.forEach((token) => {
+    if (token.type === "num") {
+      token.value = roundNumericValueFixed(token.value, precision);
+    }
+  });
+
+  const commandArity: Record<string, number> = {
+    m: 2,
+    l: 2,
+    h: 1,
+    v: 1,
+    c: 6,
+    s: 4,
+    q: 4,
+    t: 2,
+    a: 7,
+  };
+  const endpointOffsets: Record<string, number[]> = {
+    m: [0, 1],
+    l: [0, 1],
+    h: [0],
+    v: [0],
+    c: [4, 5],
+    s: [2, 3],
+    q: [2, 3],
+    t: [0, 1],
+    a: [5, 6],
+  };
+
+  // Keep enough endpoint precision to prevent a non-zero relative segment
+  // from collapsing into its preceding point.
+  for (let commandIndex = 0; commandIndex < tokens.length; commandIndex++) {
+    const commandToken = tokens[commandIndex];
+    if (commandToken.type !== "cmd") continue;
+
+    const command = commandToken.value;
+    const normalizedCommand = command.toLowerCase();
+    const arity = commandArity[normalizedCommand];
+    if (!arity || command !== normalizedCommand) continue;
+
+    let numberEnd = commandIndex + 1;
+    while (numberEnd < tokens.length && tokens[numberEnd].type === "num") {
+      numberEnd++;
+    }
+
+    let segmentIndex = 0;
+    for (
+      let segmentStart = commandIndex + 1;
+      segmentStart + arity <= numberEnd;
+      segmentStart += arity, segmentIndex++
+    ) {
+      if (normalizedCommand === "m" && segmentIndex === 0) continue;
+
+      const endpointIndices = endpointOffsets[normalizedCommand].map(
+        (offset) => segmentStart + offset,
+      );
+      const hadNonZeroEndpoint = endpointIndices.some(
+        (index) => Number(originalValues[index]) !== 0,
+      );
+      const collapsedEndpoint = endpointIndices.every(
+        (index) => Number(tokens[index].value) === 0,
+      );
+      if (!hadNonZeroEndpoint || !collapsedEndpoint) continue;
+
+      let restoredEndpoint = false;
+      for (
+        let safePrecision = Math.max(0, precision) + 1;
+        safePrecision <= 12;
+        safePrecision++
+      ) {
+        const saferValues = endpointIndices.map((index) =>
+          roundNumericValueFixed(originalValues[index], safePrecision),
+        );
+        if (saferValues.every((rounded) => Number(rounded) === 0)) continue;
+
+        endpointIndices.forEach((index, endpointIndex) => {
+          tokens[index].value = saferValues[endpointIndex];
+        });
+        restoredEndpoint = true;
+        break;
+      }
+
+      if (!restoredEndpoint) {
+        endpointIndices.forEach((index) => {
+          tokens[index].value = formatNumberCompact(
+            Number(originalValues[index]),
+          );
+        });
+      }
+    }
+  }
+
   let out = "";
   for (const token of tokens) {
     if (token.type === "cmd") {
@@ -320,7 +413,7 @@ export function roundPathData(value: string, precision: number) {
       continue;
     }
 
-    const rounded = roundNumericValueFixed(token.value, precision);
+    const rounded = token.value;
     if (out.length === 0) {
       out += rounded;
       continue;
