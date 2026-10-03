@@ -109,6 +109,8 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector(".inspector-toggle")).toBeNull();
     expect(root.querySelector(".header [title='Copy source SVG to clipboard']")).not.toBeNull();
     expect(root.querySelector(".action-button.file-button")).not.toBeNull();
+    expect(root.querySelector(".preview-background-control")).toBeNull();
+    expect(root.querySelector(".preview-container")?.hasAttribute("data-preview-background")).toBe(false);
     expect(root.querySelector('[title="Download optimized SVG"]')).not.toBeNull();
     expect(root.querySelector('[title="Save SVG to Procyon"]')).toBeNull();
   });
@@ -291,5 +293,43 @@ describe("host-specific starting layout", () => {
     expect(postMessage.mock.calls.filter(([message]) => message.type === "save-svg")).toEqual([
       [expect.objectContaining({ type: "save-svg", svg: expect.stringContaining('fill="#00ff00"') })],
     ]);
+  });
+
+  it("keeps preview background choices outside the SVG and Save payload", async () => {
+    const postMessage = vi.fn();
+    window.procyonPlugin = { loadToken: "background-test", postMessage };
+    vi.resetModules();
+    const { optimizer } = await import("../src/optimizer");
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80"><circle cx="50" cy="40" r="20"/></svg>';
+    document.body.append(root);
+    m.render(root, m(App));
+    initializeGlobalHandlers();
+    window.dispatchEvent(new MessageEvent("message", {
+      data: { type: "load-svg", svg, uri: "file:///background.svg", loadToken: "background-test" },
+      source: window,
+    }));
+    m.render(root, m(App));
+
+    const container = root.querySelector<HTMLElement>(".preview-container")!;
+    const picker = root.querySelector<HTMLSelectElement>(".preview-background-control select");
+    expect(picker?.labels?.[0]?.textContent).toContain("Background");
+    expect(Array.from(picker?.options ?? [], (option) => option.value)).toEqual([
+      "white", "black", "checkerboard",
+    ]);
+    expect(container.dataset.previewBackground).toBe("white");
+    const source = optimizer.getSourceSvg();
+    const preview = optimizer.getPreviewSvg();
+    for (const background of ["black", "checkerboard", "white"]) {
+      picker!.value = background;
+      picker!.dispatchEvent(new Event("change", { bubbles: true }));
+      m.render(root, m(App));
+      expect(container.dataset.previewBackground).toBe(background);
+      expect(optimizer.getSourceSvg()).toBe(source);
+      expect(optimizer.getPreviewSvg()).toBe(preview);
+      expect(container.querySelector("svg")?.outerHTML).not.toContain(background);
+    }
+    root.querySelector<HTMLButtonElement>('[title="Save SVG to Procyon"]')?.click();
+    expect(postMessage).toHaveBeenCalledWith({ type: "save-svg", svg: source });
   });
 });

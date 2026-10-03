@@ -1,5 +1,10 @@
 import m from "mithril";
+import { procyonPlugin } from "../procyon";
 import { sanitizePreviewSvg } from "../svgPreview";
+
+type PreviewBackground = "white" | "black" | "checkerboard";
+let previewBackground: PreviewBackground = "white";
+
 export type PreviewPanelAttrs = {
   previewSvg: string;
   splitOrientation: "vertical" | "horizontal";
@@ -48,6 +53,24 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
         m("span", "Optimized SVG"),
         previewSvg &&
           m("div.preview-controls", [
+            procyonPlugin
+              ? m("label.preview-background-control", [
+                  m("span", "Background"),
+                  m("select", {
+                    value: previewBackground,
+                    onchange: (event: Event) => {
+                      const value = (event.target as HTMLSelectElement).value;
+                      if (value === "white" || value === "black" || value === "checkerboard") {
+                        previewBackground = value;
+                      }
+                    },
+                  }, [
+                    m("option[value=white]", "White"),
+                    m("option[value=black]", "Black"),
+                    m("option[value=checkerboard]", "Checkerboard"),
+                  ]),
+                ])
+              : null,
             m(
               "button.preview-control-btn",
               {
@@ -64,7 +87,9 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
             m("button.preview-control-btn", { onclick: onResetZoom }, "Reset"),
           ]),
       ]),
-      m(".preview-container", [
+      m(".preview-container", {
+        "data-preview-background": procyonPlugin ? previewBackground : undefined,
+      }, [
         previewSvg
           ? m.trust(sanitizePreviewSvg(previewSvg))
           : m("div.preview-placeholder", "Preview will appear here"),

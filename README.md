@@ -52,7 +52,10 @@ above the SVG preview at equal height. Procyon has no Code view or view switch;
 the sidebar menu contains optimization actions. Procyon hides the standalone
 Source SVG header, Open action, and app title, and places Save in the header
 and Copy in the sidebar menu. Standalone and VS Code keep their existing
-defaults. The Procyon Tree view retains a small vertical inset.
+defaults. The Procyon Tree view retains a small vertical inset. The preview
+background selector switches between fixed white (default), black, and
+checkerboard viewport backdrops without changing the SVG or its Save payload.
+Preview scrollbars are hidden while oversized SVGs remain pannable.
 
 Before loading the app, the isolated host injects
 `window.procyonPlugin = { loadToken, theme, settings, postMessage }`. `loadToken` is an
@@ -100,7 +103,7 @@ in-window message path when Procyon's effective theme changes. Without a host
 theme, the plugin follows the system color scheme. Procyon mode uses the host's
 surface, text, border, and accent colors for its light/dark palettes; standalone
 SVGO keeps its existing colors. In Procyon, the toolbar and preview work area
-use a raised surface, while the SVG canvas remains neutral and borderless; SVG
+use a raised toolbar surface and a selectable, borderless preview backdrop; SVG
 backgrounds painted by the document are preserved. Procyon does not read or store
 SVGO's standalone theme preference, SVG content, document URIs, history, or
 view mode. Every new panel starts in Tree mode with the sidebar closed and an
