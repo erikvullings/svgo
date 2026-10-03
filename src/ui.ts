@@ -82,7 +82,7 @@ function readSplitterOrientation(): SplitOrientation {
 let theme: "dark" | "light" | "auto" = readTheme();
 let sidebarOpen = procyonPlugin ? false : readSidebarOpen();
 let splitterPercent = procyonPlugin ? 50 : readSplitterPercent();
-let splitterOrientation: SplitOrientation = procyonPlugin ? "horizontal" : readSplitterOrientation();
+let splitterOrientation: SplitOrientation = procyonPlugin ? "vertical" : readSplitterOrientation();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
@@ -222,7 +222,7 @@ function applySplitterLayout(
   const normalizedPercent = clampSplitterPercent(percent);
   const safeTotal = Math.max(1, totalSize);
   const percentSplitter = (6 / safeTotal) * 100;
-  const leftPercent = procyonPlugin && orientation === "horizontal"
+  const leftPercent = procyonPlugin
     ? normalizedPercent * (1 - percentSplitter / 100)
     : normalizedPercent;
   left.style.flex = `0 0 ${leftPercent}%`;

@@ -14,11 +14,11 @@ afterEach(() => {
 });
 
 describe("host-specific starting layout", () => {
-  it("opens Procyon in Tree mode with a closed sidebar and equal-width side-by-side preview", async () => {
+  it("opens Procyon in Tree mode with a closed sidebar and equal-height top/bottom preview", async () => {
     vi.useFakeTimers();
     localStorage.setItem("svgo-sidebar-open", "true");
     localStorage.setItem("svgo-splitter-percent", "75");
-    localStorage.setItem("svgo-splitter-orientation", "vertical");
+    localStorage.setItem("svgo-splitter-orientation", "horizontal");
     window.procyonPlugin = { loadToken: "layout-test", postMessage: vi.fn() };
     vi.resetModules();
     const { optimizer } = await import("../src/optimizer");
@@ -35,11 +35,13 @@ describe("host-specific starting layout", () => {
     expect(optimizer.options.viewMode).toBe("tree");
     expect(root.querySelector(".tree-view")).not.toBeNull();
     expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
-    expect(root.querySelector(".main-content")?.classList.contains("is-horizontal")).toBe(true);
+    expect(root.querySelector(".main-content")?.classList.contains("is-vertical")).toBe(true);
+    expect(root.querySelector(".main-content")?.firstElementChild?.id).toBe("left-panel");
+    expect(root.querySelector("#right-panel")?.previousElementSibling?.id).toBe("dragbar");
     const leftPercent = Number.parseFloat(root.querySelector<HTMLElement>("#left-panel")!.style.flexBasis);
     const rightPercent = Number.parseFloat(root.querySelector<HTMLElement>("#right-panel")!.style.flexBasis);
     expect(leftPercent).toBeCloseTo(rightPercent);
-    expect(leftPercent + rightPercent + 0.6).toBeCloseTo(100);
+    expect(leftPercent + rightPercent + (6 / 800) * 100).toBeCloseTo(100);
     expect(root.querySelector(".header .title")).toBeNull();
     expect(root.querySelector(".header [title='Save SVG to Procyon']")).not.toBeNull();
     expect(root.querySelector(".header [title='Copy source SVG to clipboard']")).toBeNull();
@@ -53,6 +55,14 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector(".sidebar [title='Copy source SVG to clipboard']")).not.toBeNull();
     expect(root.querySelector(".sidebar [title='Save SVG to Procyon']")).toBeNull();
     expect(root.querySelector('[title="Download optimized SVG"]')).toBeNull();
+
+    optimizer.optimizedSvg = '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10"/></svg>';
+    m.render(root, m(App));
+    const splitToggle = root.querySelector<HTMLButtonElement>('[title="Switch to horizontal split"]');
+    expect(splitToggle).not.toBeNull();
+    splitToggle!.click();
+    m.render(root, m(App));
+    expect(root.querySelector(".main-content")?.classList.contains("is-horizontal")).toBe(true);
   });
 
   it("preserves the standalone defaults and Open/Download actions", async () => {
@@ -89,7 +99,7 @@ describe("host-specific starting layout", () => {
     localStorage.setItem("svgo-theme", "dark");
     localStorage.setItem("svgo-sidebar-open", "true");
     localStorage.setItem("svgo-splitter-percent", "75");
-    localStorage.setItem("svgo-splitter-orientation", "vertical");
+    localStorage.setItem("svgo-splitter-orientation", "horizontal");
     const postMessage = vi.fn();
     const injectedSettings = {
       precision: 3, pathPrecision: 4, removeStyling: false,
@@ -160,7 +170,7 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector('[title="Toggle theme"]')).toBeNull();
     expect(localStorage.getItem("svgo-theme")).toBe("dark");
     expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
-    expect(root.querySelector(".main-content")?.classList.contains("is-horizontal")).toBe(true);
+    expect(root.querySelector(".main-content")?.classList.contains("is-vertical")).toBe(true);
     const left = Number.parseFloat(root.querySelector<HTMLElement>("#left-panel")!.style.flexBasis);
     const right = Number.parseFloat(root.querySelector<HTMLElement>("#right-panel")!.style.flexBasis);
     expect(left).toBeCloseTo(right);

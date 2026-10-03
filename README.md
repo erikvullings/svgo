@@ -47,7 +47,7 @@ Run `pnpm build:procyon` to produce a self-contained web app at `dist/procyon/`
 unlike the standalone and VS Code builds, which retain their existing CDN setup.
 Package the complete directory; it does not need network access for the editor.
 When hosted by Procyon, the app starts in Tree mode with the sidebar closed,
-shows the tree/editor and SVG preview side-by-side at equal width, hides the
+shows the tree/editor above the SVG preview at equal height, hides the
 standalone Open action and app title, and places Save in the header and Copy
 in the sidebar menu. Standalone and VS Code keep their existing defaults.
 
@@ -99,7 +99,7 @@ surface, text, border, and accent colors for its light/dark palettes; standalone
 SVGO keeps its existing colors. Procyon does not read or store
 SVGO's standalone theme preference, SVG content, document URIs, history, or
 view mode. Every new panel starts in Tree mode with the sidebar closed and an
-equal horizontal split. Changes to the sidebar and split remain session-local
+equal top/bottom split. Changes to the sidebar and split remain session-local
 even if previous layout values exist in storage. Standalone storage at
 `svgo-state-v1` is not read in Procyon.
 The preview and live SVG bounds measurement sanitize loaded markup before
