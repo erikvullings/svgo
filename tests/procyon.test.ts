@@ -16,10 +16,10 @@ describe("Procyon host adapter", () => {
   });
 
   it("accepts only same-window loads with the matching token and valid payload", async () => {
-    const { loadProcyonSvg } = await import("../src/procyon");
+    const { handleProcyonMessage } = await import("../src/procyon");
     const optimizer = new SVGOptimizer();
     const dispatch = (data: unknown, source: MessageEventSource | null = window) =>
-      loadProcyonSvg(new MessageEvent("message", { data, source }), optimizer);
+      handleProcyonMessage(new MessageEvent("message", { data, source }), optimizer);
 
     dispatch({ type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" }, null);
     dispatch({ type: "load-svg", svg, uri: "file:///image.svg", loadToken: "wrong" });
@@ -36,7 +36,7 @@ describe("Procyon host adapter", () => {
   });
 
   it("sends the current source exactly once per explicit save and never the preview", async () => {
-    const { loadProcyonSvg, saveProcyonSvg } = await import("../src/procyon");
+    const { handleProcyonMessage, saveProcyonSvg } = await import("../src/procyon");
     const optimizer = new SVGOptimizer();
     saveProcyonSvg(optimizer);
     expect(postMessage).not.toHaveBeenCalled();
@@ -44,7 +44,7 @@ describe("Procyon host adapter", () => {
     optimizer.loadSvgString(svg);
     saveProcyonSvg(optimizer);
     expect(postMessage).not.toHaveBeenCalled();
-    loadProcyonSvg(new MessageEvent("message", {
+    handleProcyonMessage(new MessageEvent("message", {
       data: { type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" },
       source: window,
     }), optimizer);
@@ -54,7 +54,7 @@ describe("Procyon host adapter", () => {
   });
 
   it("shows Save only when offered by the host and wires the action", async () => {
-    const { canSaveProcyonSvg, loadProcyonSvg, saveProcyonSvg } = await import("../src/procyon");
+    const { canSaveProcyonSvg, handleProcyonMessage, saveProcyonSvg } = await import("../src/procyon");
     const optimizer = new SVGOptimizer();
     const attrs = {
       optimizer,
@@ -71,7 +71,7 @@ describe("Procyon host adapter", () => {
     expect(document.querySelector('button[title="Download optimized SVG"]')).toBeNull();
     let save = document.querySelector<HTMLButtonElement>('button[title="Save SVG to Procyon"]');
     expect(save?.disabled).toBe(true);
-    loadProcyonSvg(new MessageEvent("message", {
+    handleProcyonMessage(new MessageEvent("message", {
       data: { type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" },
       source: window,
     }), optimizer);
@@ -88,7 +88,7 @@ describe("Procyon host adapter", () => {
 
   it("handles Cmd/Ctrl+S even while the code editor or an input is focused", async () => {
     const { optimizer } = await import("../src/optimizer");
-    const { loadProcyonSvg } = await import("../src/procyon");
+    const { handleProcyonMessage } = await import("../src/procyon");
     const { initializeGlobalHandlers } = await import("../src/ui");
     initializeGlobalHandlers();
 
@@ -99,7 +99,7 @@ describe("Procyon host adapter", () => {
       key: "s", metaKey: true, bubbles: true, cancelable: true,
     }));
     expect(postMessage).not.toHaveBeenCalled();
-    loadProcyonSvg(new MessageEvent("message", {
+    handleProcyonMessage(new MessageEvent("message", {
       data: { type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" },
       source: window,
     }), optimizer);
@@ -135,6 +135,75 @@ describe("Procyon host adapter", () => {
       expect(postMessage).not.toHaveBeenCalled();
     } finally {
       vi.unstubAllGlobals();
+    }
+  });
+
+  it("accepts only typed save results from the trusted window and token", async () => {
+    const { handleProcyonMessage } = await import("../src/procyon");
+    const optimizer = new SVGOptimizer();
+    const result = (data: unknown, source: MessageEventSource | null = window) =>
+      handleProcyonMessage(new MessageEvent("message", { data, source }), optimizer);
+
+    expect(result({ type: "save-result", success: false, error: "Disk full", loadToken: "test-window-token" }, null)).toBeNull();
+    expect(result({ type: "save-result", success: false, error: "Disk full", loadToken: "wrong" })).toBeNull();
+    expect(result({ type: "save-result", success: "false", error: "Disk full", loadToken: "test-window-token" })).toBeNull();
+    expect(result({ type: "save-result", success: false, error: 42, loadToken: "test-window-token" })).toBeNull();
+    expect(result({ type: "save-result", success: false, error: "Disk full", loadToken: "test-window-token" })).toEqual({
+      type: "save-result", success: false, error: "Disk full",
+    });
+    expect(result({ type: "save-result", success: false, loadToken: "test-window-token" })).toEqual({
+      type: "save-result", success: false, error: undefined,
+    });
+    expect(result({ type: "save-result", success: true, loadToken: "test-window-token" })).toEqual({
+      type: "save-result", success: true,
+    });
+  });
+
+  it("keeps failed saves visible until retry or a new load", async () => {
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    const { optimizer } = await import("../src/optimizer");
+    const editorInit = vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    const root = document.createElement("div");
+    document.body.append(root);
+    vi.useFakeTimers();
+    try {
+      m.render(root, m(App));
+      initializeGlobalHandlers();
+      const send = (data: unknown, source: MessageEventSource | null = window) => {
+        window.dispatchEvent(new MessageEvent("message", { data, source }));
+        m.render(root, m(App));
+      };
+      send({ type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" });
+      root.querySelector<HTMLButtonElement>('[title="Save SVG to Procyon"]')?.click();
+      m.render(root, m(App));
+      expect(root.querySelector(".save-status")?.textContent).toBe("Saving SVG...");
+
+      send({ type: "save-result", success: false, error: "Disk full", loadToken: "wrong" });
+      send({ type: "save-result", success: false, error: "Disk full", loadToken: "test-window-token" }, null);
+      expect(root.querySelector(".save-status")?.textContent).toBe("Saving SVG...");
+
+      send({ type: "save-result", success: false, error: "Disk full", loadToken: "test-window-token" });
+      expect(root.querySelector('[role="alert"]')?.textContent).toBe("Save failed: Disk full");
+      vi.advanceTimersByTime(5000);
+      expect(root.querySelector('[role="alert"]')?.textContent).toBe("Save failed: Disk full");
+
+      root.querySelector<HTMLButtonElement>('[title="Save SVG to Procyon"]')?.click();
+      m.render(root, m(App));
+      expect(root.querySelector(".save-status")?.textContent).toBe("Saving SVG...");
+      send({ type: "save-result", success: true, loadToken: "test-window-token" });
+      expect(root.querySelector(".save-status")?.textContent).toBe("SVG saved.");
+      vi.advanceTimersByTime(3000);
+      m.render(root, m(App));
+      expect(root.querySelector(".save-status")).toBeNull();
+
+      send({ type: "save-result", success: false, loadToken: "test-window-token" });
+      expect(root.querySelector('[role="alert"]')?.textContent).toBe("Save failed.");
+      send({ type: "load-svg", svg, uri: "file:///second.svg", loadToken: "test-window-token" });
+      expect(root.querySelector(".save-status")).toBeNull();
+    } finally {
+      m.render(root, null);
+      vi.useRealTimers();
+      editorInit.mockRestore();
     }
   });
 });

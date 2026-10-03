@@ -57,7 +57,15 @@ only from the same window with the matching token. The host owns the URI and
 must save the `svg` from an explicit Save button or Cmd/Ctrl+S to that document.
 Editing and loading do not send save messages. The host should restrict its
 message bridge to `save-svg` and scope it to the current document/window.
+After each save attempt, the host reports
+`{ type: "save-result", success: boolean, error?: string, loadToken }` through
+the same in-window `postMessage` path. A failed save displays the host's error
+(or a generic failure) until the next save or document load.
 Procyon state is not restored from local storage.
+The preview inserts loaded SVG markup, which may itself reference remote
+images, fonts, or styles. The host must enforce a CSP that blocks external
+resource origins and untrusted scripts while allowing local assets and Monaco's
+blob worker.
 
 ## VS Code Extension: Use The App In VS Code
 

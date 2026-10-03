@@ -15,19 +15,37 @@ export const procyonPlugin: ProcyonPlugin | undefined =
 
 let documentLoaded = false;
 
-export function loadProcyonSvg(event: MessageEvent, optimizer: SVGOptimizer): void {
-  if (!procyonPlugin || event.source !== window) return;
+export type ProcyonSaveResult =
+  | { type: "save-result"; success: true }
+  | { type: "save-result"; success: false; error?: string };
+
+export function handleProcyonMessage(
+  event: MessageEvent,
+  optimizer: SVGOptimizer,
+): { type: "load-svg" } | ProcyonSaveResult | null {
+  if (!procyonPlugin || event.source !== window) return null;
   const data = event.data;
   if (
     !data ||
     typeof data !== "object" ||
-    data.type !== "load-svg" ||
-    data.loadToken !== procyonPlugin.loadToken ||
-    typeof data.svg !== "string" ||
-    typeof data.uri !== "string"
-  ) return;
-  documentLoaded = true;
-  optimizer.loadSvgString(data.svg);
+    data.loadToken !== procyonPlugin.loadToken
+  ) return null;
+  if (data.type === "load-svg") {
+    if (typeof data.svg !== "string" || typeof data.uri !== "string") return null;
+    documentLoaded = true;
+    optimizer.loadSvgString(data.svg);
+    return { type: "load-svg" };
+  }
+  if (
+    data.type === "save-result" &&
+    typeof data.success === "boolean" &&
+    (data.error === undefined || typeof data.error === "string")
+  ) {
+    return data.success
+      ? { type: "save-result", success: true }
+      : { type: "save-result", success: false, error: data.error };
+  }
+  return null;
 }
 
 export function canSaveProcyonSvg(optimizer: SVGOptimizer): boolean {

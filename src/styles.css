@@ -1482,6 +1482,14 @@ text.highlighted-preview.white-outline {
   animation: app-toast-in 0.16s ease-out;
 }
 
+.app-toast[role="status"] + .app-toast.save-status {
+  bottom: 72px;
+}
+
+.app-toast.save-status.save-error {
+  border-color: #d15b5b;
+}
+
 @keyframes app-toast-in {
   from {
     opacity: 0;

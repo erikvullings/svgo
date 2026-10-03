@@ -4,7 +4,7 @@ import { Header } from "./components/header";
 import { EditorPanel } from "./components/editorPanel";
 import { PreviewPanel } from "./components/previewPanel";
 import { Sidebar } from "./components/sidebar";
-import { canSaveProcyonSvg, loadProcyonSvg, procyonPlugin, saveProcyonSvg } from "./procyon";
+import { canSaveProcyonSvg, handleProcyonMessage, procyonPlugin, saveProcyonSvg } from "./procyon";
 
 let svgScale = 1;
 let panX = 0;
@@ -81,6 +81,8 @@ let splitterOrientation: SplitOrientation = readSplitterOrientation();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
+let saveStatus: { kind: "saving" | "success" | "error"; message: string } | null = null;
+let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
 const showFileActions = true;
 const showDownload = !procyonPlugin;
@@ -147,6 +149,33 @@ function showPasteToast(message: string): void {
     m.redraw();
   }, 2800);
   m.redraw();
+}
+
+function setSaveStatus(status: typeof saveStatus): void {
+  if (saveStatusTimer) clearTimeout(saveStatusTimer);
+  saveStatusTimer = null;
+  saveStatus = status;
+  if (status?.kind === "success") {
+    saveStatusTimer = setTimeout(() => {
+      saveStatus = null;
+      saveStatusTimer = null;
+      m.redraw();
+    }, 2800);
+  }
+  m.redraw();
+}
+
+function requestProcyonSave(): void {
+  if (!canSaveProcyonSvg(optimizer)) return;
+  setSaveStatus({ kind: "saving", message: "Saving SVG..." });
+  try {
+    saveProcyonSvg(optimizer);
+  } catch (error) {
+    setSaveStatus({
+      kind: "error",
+      message: `Save failed: ${error instanceof Error ? error.message : String(error)}`,
+    });
+  }
 }
 
 function resolveTheme(nextTheme: "dark" | "light" | "auto") {
@@ -425,7 +454,7 @@ export const App: m.Component = {
           open: sidebarOpen,
           showFileActions,
           showDownload,
-          onSave: procyonPlugin ? () => saveProcyonSvg(optimizer) : undefined,
+          onSave: procyonPlugin ? requestProcyonSave : undefined,
           canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
         }),
         m(".app-main", [
@@ -473,6 +502,17 @@ export const App: m.Component = {
       pasteToastMessage
         ? m(".app-toast[role=status][aria-live=polite]", pasteToastMessage)
         : null,
+      saveStatus
+        ? m(
+            ".app-toast.save-status",
+            {
+              class: saveStatus.kind === "error" ? "save-error" : "",
+              role: saveStatus.kind === "error" ? "alert" : "status",
+              "aria-live": saveStatus.kind === "error" ? "assertive" : "polite",
+            },
+            saveStatus.message,
+          )
+        : null,
     ];
 
     return m("div", body);
@@ -487,7 +527,22 @@ export function initializeGlobalHandlers() {
   document.addEventListener("paste", handleGlobalSvgPaste);
 
   if (procyonPlugin) {
-    window.addEventListener("message", (event) => loadProcyonSvg(event, optimizer));
+    window.addEventListener("message", (event) => {
+      const message = handleProcyonMessage(event, optimizer);
+      if (!message) return;
+      if (message.type === "load-svg") {
+        setSaveStatus(null);
+      } else {
+        setSaveStatus(message.success
+          ? { kind: "success", message: "SVG saved." }
+          : {
+              kind: "error",
+              message: "error" in message && message.error
+                ? `Save failed: ${message.error}`
+                : "Save failed.",
+            });
+      }
+    });
     window.addEventListener("keydown", (e) => {
       if (
         (e.metaKey || e.ctrlKey) &&
@@ -497,7 +552,7 @@ export function initializeGlobalHandlers() {
       ) {
         e.preventDefault();
         e.stopPropagation();
-        saveProcyonSvg(optimizer);
+        requestProcyonSave();
       }
     }, true);
   } else if (vscodeApi) {
