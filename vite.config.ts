@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => ({
     name: 'tree-only-procyon',
     transformIndexHtml(html: string) {
       return html.replace(
-        /<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/monaco-editor\/[^"]+"><\/script>/,
+        /^[ \t]*<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/monaco-editor\/[^"]+"><\/script>\r?\n/m,
         ''
       );
     }
