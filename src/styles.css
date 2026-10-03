@@ -17,7 +17,8 @@
   --button-disabled: #7a7a7a;
   --input-bg: #404040;
   --input-border: #555;
-  --preview-bg: #2a2a2a;
+  --preview-dark-bg: #2a2a2a;
+  --preview-bg: var(--preview-dark-bg);
   --danger: #f44336;
   --danger-hover: #ff6b6b;
   --success: #4caf50;
@@ -527,7 +528,7 @@ button:hover,
 }
 
 .preview-container[data-preview-background="dark"] {
-  background: #252d38;
+  background: var(--preview-dark-bg);
 }
 
 .preview-container[data-preview-background="checkerboard"] {

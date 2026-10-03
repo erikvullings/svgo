@@ -42,7 +42,7 @@ pnpm build
 
 The standalone editor opens in Tree view; Tree/Code switching lives in the
 sidebar menu, and the Properties inspector starts collapsed. The preview has
-fixed Light (`#ffffff`), Dark (`#252d38`), and Checkerboard backgrounds:
+fixed Light (`#ffffff`), Dark (`#2a2a2a`), and Checkerboard backgrounds:
 it follows the active app theme (including Auto) until a background is chosen.
 Background selection changes only the display, not the downloadable SVG.
 Wheel zoom is bounded and anchored to the cursor; oversized art remains
