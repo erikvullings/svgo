@@ -10,6 +10,7 @@ import {
   collapseTransforms,
 } from "./svgUtils";
 import { sanitizePreviewSvg } from "./svgPreview";
+import { procyonPlugin } from "./procyon";
 
 type OptimizeOptions = {
   precision: number;
@@ -114,7 +115,7 @@ class SVGOptimizer {
       convertSodipodiArcs: true,
       groupSimilarElements: true,
       groupTextElementsAtEnd: false,
-      viewMode: "code", // 'code', 'tree'
+      viewMode: procyonPlugin ? "tree" : "code",
       selectedElementPath: null, // JSON path or similar to track selected element
       treeDoc: null, // Parsed DOM for the Tree View
       isUpdatingFromTree: false, // Flag to prevent redundant re-parsing

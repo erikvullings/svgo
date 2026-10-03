@@ -75,16 +75,16 @@ function readSplitterOrientation(): SplitOrientation {
 }
 
 let theme: "dark" | "light" | "auto" = readTheme();
-let sidebarOpen = readSidebarOpen();
-let splitterPercent = readSplitterPercent();
-let splitterOrientation: SplitOrientation = readSplitterOrientation();
+let sidebarOpen = procyonPlugin ? false : readSidebarOpen();
+let splitterPercent = procyonPlugin ? 50 : readSplitterPercent();
+let splitterOrientation: SplitOrientation = procyonPlugin ? "horizontal" : readSplitterOrientation();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
 let saveStatus: { kind: "saving" | "success" | "error"; message: string } | null = null;
 let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
 
-const showFileActions = true;
+const showFileActions = !procyonPlugin;
 const showDownload = !procyonPlugin;
 
 function fingerprintSvg(svg: string): string {
@@ -216,8 +216,11 @@ function applySplitterLayout(
   const normalizedPercent = clampSplitterPercent(percent);
   const safeTotal = Math.max(1, totalSize);
   const percentSplitter = (6 / safeTotal) * 100;
-  left.style.flex = `0 0 ${normalizedPercent}%`;
-  right.style.flex = `0 0 ${100 - normalizedPercent - percentSplitter}%`;
+  const leftPercent = procyonPlugin && orientation === "horizontal"
+    ? normalizedPercent * (1 - percentSplitter / 100)
+    : normalizedPercent;
+  left.style.flex = `0 0 ${leftPercent}%`;
+  right.style.flex = `0 0 ${100 - leftPercent - percentSplitter}%`;
 
   if (orientation === "horizontal") {
     left.style.minWidth = "0";
@@ -460,6 +463,7 @@ export const App: m.Component = {
         m(".app-main", [
           m(Header, {
             stats: headerStats,
+            showTitle: !procyonPlugin,
             onToggleSidebar: toggleSidebar,
             canOptimize: hasSource,
             onOptimize: () => optimizer.loadOptimizedFile(),

@@ -9,6 +9,7 @@ export type HeaderStats = {
 
 export type HeaderAttrs = {
   stats: HeaderStats;
+  showTitle: boolean;
   onToggleSidebar: () => void;
   canOptimize: boolean;
   onOptimize: () => void;
@@ -21,6 +22,7 @@ export const Header: m.Component<HeaderAttrs> = {
   view({ attrs }) {
     const {
       stats,
+      showTitle,
       onToggleSidebar,
       canOptimize,
       onOptimize,
@@ -35,10 +37,12 @@ export const Header: m.Component<HeaderAttrs> = {
           { onclick: onToggleSidebar, title: "Toggle sidebar" },
           iconMenu(),
         ),
-        m(".title", [
-          m("img.logo", { src: "logo.svg", alt: "Logo" }),
-          m("span", "Advanced SVG Optimizer"),
-        ]),
+        showTitle
+          ? m(".title", [
+              m("img.logo", { src: "logo.svg", alt: "Logo" }),
+              m("span", "Advanced SVG Optimizer"),
+            ])
+          : null,
       ]),
       m(".stats", [
         m(".header-actions", [

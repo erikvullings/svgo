@@ -46,6 +46,10 @@ Run `pnpm build:procyon` to produce a self-contained web app at `dist/procyon/`
 (entry point `dist/procyon/index.html`). This build includes Monaco locally,
 unlike the standalone and VS Code builds, which retain their existing CDN setup.
 Package the complete directory; it does not need network access for the editor.
+When hosted by Procyon, the app starts in Tree mode with the sidebar closed,
+shows the tree/editor and SVG preview side-by-side at equal width, hides the
+standalone Open action and app title, and retains explicit Save. Standalone
+and VS Code keep their existing defaults.
 
 Before loading the app, the isolated host injects
 `window.procyonPlugin = { loadToken, postMessage }`. `loadToken` is an
