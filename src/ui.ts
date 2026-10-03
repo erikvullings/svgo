@@ -4,6 +4,7 @@ import { Header } from "./components/header";
 import { EditorPanel } from "./components/editorPanel";
 import { PreviewPanel } from "./components/previewPanel";
 import { Sidebar } from "./components/sidebar";
+import { canSaveProcyonSvg, loadProcyonSvg, procyonPlugin, saveProcyonSvg } from "./procyon";
 
 let svgScale = 1;
 let panX = 0;
@@ -82,7 +83,7 @@ let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
 
 const showFileActions = true;
-const showDownload = true;
+const showDownload = !procyonPlugin;
 
 function fingerprintSvg(svg: string): string {
   const normalized = svg.trim().replace(/\s+/g, " ");
@@ -424,6 +425,8 @@ export const App: m.Component = {
           open: sidebarOpen,
           showFileActions,
           showDownload,
+          onSave: procyonPlugin ? () => saveProcyonSvg(optimizer) : undefined,
+          canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
         }),
         m(".app-main", [
           m(Header, {
@@ -483,7 +486,21 @@ export function initializeGlobalHandlers() {
   setupPanEvents();
   document.addEventListener("paste", handleGlobalSvgPaste);
 
-  if (vscodeApi) {
+  if (procyonPlugin) {
+    window.addEventListener("message", (event) => loadProcyonSvg(event, optimizer));
+    window.addEventListener("keydown", (e) => {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        !e.altKey &&
+        !e.shiftKey &&
+        e.key.toLowerCase() === "s"
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        saveProcyonSvg(optimizer);
+      }
+    }, true);
+  } else if (vscodeApi) {
     window.addEventListener("message", (event) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;

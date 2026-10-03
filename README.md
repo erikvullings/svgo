@@ -40,6 +40,25 @@ pnpm build
 
 `pnpm build` writes the web app to `docs/` (used for GitHub Pages).
 
+## Procyon plugin build
+
+Run `pnpm build:procyon` to produce a self-contained web app at `dist/procyon/`
+(entry point `dist/procyon/index.html`). This build includes Monaco locally,
+unlike the standalone and VS Code builds, which retain their existing CDN setup.
+Package the complete directory; it does not need network access for the editor.
+
+Before loading the app, the isolated host injects
+`window.procyonPlugin = { loadToken, postMessage }`. `loadToken` is an
+unpredictable, nonempty string unique to each plugin window; `postMessage`
+accepts `{ type: "save-svg", svg: string }`. After the window loads, the host
+delivers `{ type: "load-svg", svg: string, uri: string, loadToken }` via
+`window.postMessage` executed **inside that window**. The app accepts loads
+only from the same window with the matching token. The host owns the URI and
+must save the `svg` from an explicit Save button or Cmd/Ctrl+S to that document.
+Editing and loading do not send save messages. The host should restrict its
+message bridge to `save-svg` and scope it to the current document/window.
+Procyon state is not restored from local storage.
+
 ## VS Code Extension: Use The App In VS Code
 
 The extension lives in `extension/` and provides the command:

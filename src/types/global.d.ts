@@ -54,6 +54,10 @@ interface FileSystemFileHandle {
 }
 
 interface Window {
+  procyonPlugin?: {
+    loadToken: string;
+    postMessage(message: { type: "save-svg"; svg: string }): void;
+  };
   showSaveFilePicker?: (options?: {
     suggestedName?: string;
     types?: { description: string; accept: Record<string, string[]> }[];
