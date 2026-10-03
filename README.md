@@ -62,10 +62,12 @@ After each save attempt, the host reports
 the same in-window `postMessage` path. A failed save displays the host's error
 (or a generic failure) until the next save or document load.
 Procyon state is not restored from local storage.
-The preview inserts loaded SVG markup, which may itself reference remote
-images, fonts, or styles. The host must enforce a CSP that blocks external
-resource origins and untrusted scripts while allowing local assets and Monaco's
-blob worker.
+The preview and live SVG bounds measurement sanitize loaded markup before
+inserting it into the DOM. Scripts, event handlers, foreignObject, external
+references, and unsafe styles are removed from the rendered copy; the editable
+source and Save payload remain unchanged. The host must still enforce a CSP
+that blocks external resource origins and untrusted scripts while allowing
+local assets and Monaco's blob worker.
 
 ## VS Code Extension: Use The App In VS Code
 

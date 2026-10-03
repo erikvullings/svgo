@@ -9,6 +9,7 @@ import {
   roundPathData,
   collapseTransforms,
 } from "./svgUtils";
+import { sanitizePreviewSvg } from "./svgPreview";
 
 type OptimizeOptions = {
   precision: number;
@@ -2230,7 +2231,7 @@ class SVGOptimizer {
     tempDiv.style.overflow = "hidden";
     document.body.appendChild(tempDiv); // Append to body to make getBBox work
 
-    tempDiv.innerHTML = svgString;
+    tempDiv.innerHTML = sanitizePreviewSvg(svgString);
     const svgElement = tempDiv.querySelector("svg");
 
     if (!svgElement) {

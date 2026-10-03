@@ -1,4 +1,5 @@
 import m from "mithril";
+import { sanitizePreviewSvg } from "../svgPreview";
 export type PreviewPanelAttrs = {
   previewSvg: string;
   splitOrientation: "vertical" | "horizontal";
@@ -65,7 +66,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
       ]),
       m(".preview-container", [
         previewSvg
-          ? m.trust(previewSvg)
+          ? m.trust(sanitizePreviewSvg(previewSvg))
           : m("div.preview-placeholder", "Preview will appear here"),
       ]),
     ]);
