@@ -1,3 +1,5 @@
+/// <reference types="vite/client" />
+
 type PathDataSegment = { type: string; values: number[] };
 
 interface SVGPathElement {
@@ -8,7 +10,6 @@ type MonacoEditorInstance = {
   getValue: () => string;
   setValue: (value: string) => void;
   onDidChangeModelContent: (listener: () => void) => void;
-  layout: () => void;
 };
 
 type MonacoLanguageConfig = {
@@ -33,8 +34,6 @@ interface MonacoApi {
         minimap: { enabled: boolean };
         wordWrap: 'on' | 'off' | 'bounded';
         renderLineHighlight: 'none' | 'line' | 'all' | 'gutter';
-        lineNumbersMinChars?: number;
-        lineDecorationsWidth?: number;
       }
     ) => MonacoEditorInstance;
   };
@@ -57,15 +56,6 @@ interface FileSystemFileHandle {
 }
 
 interface Window {
-  procyonPlugin?: {
-    loadToken: string;
-    theme?: 'light' | 'dark';
-    settings?: Partial<import('../optimizer').ProcyonOptimizerSettings>;
-    postMessage(message:
-      | { type: "save-svg"; svg: string }
-      | { type: "settings-change"; settings: import('../optimizer').ProcyonOptimizerSettings; sequence: number; flush?: true }
-    ): void;
-  };
   showSaveFilePicker?: (options?: {
     suggestedName?: string;
     types?: { description: string; accept: Record<string, string[]> }[];

@@ -1,18 +1,15 @@
 import m from "mithril";
 import { SVGOptimizer } from "../optimizer";
 import { Controls } from "./controls";
-import { iconCopy } from "./actionIcons";
 
 export type SidebarAttrs = {
   optimizer: SVGOptimizer;
   sourceSvg: string;
   theme: "dark" | "light" | "auto";
-  onToggleTheme?: () => void;
+  onToggleTheme: () => void;
   open: boolean;
   showFileActions: boolean;
   showDownload: boolean;
-  onCopy?: () => void;
-  isCopied?: boolean;
 };
 
 export const Sidebar: m.Component<SidebarAttrs> = {
@@ -25,8 +22,6 @@ export const Sidebar: m.Component<SidebarAttrs> = {
       open,
       showFileActions,
       showDownload,
-      onCopy,
-      isCopied,
     } = attrs;
 
     const hasSource = sourceSvg && sourceSvg.trim().length > 0;
@@ -68,17 +63,6 @@ export const Sidebar: m.Component<SidebarAttrs> = {
                     disabled: hasSource ? undefined : "disabled",
                   },
                   [iconDownload(), m("span", "Download")],
-                )
-              : null,
-            onCopy
-              ? m(
-                  "button.action-button",
-                  {
-                    title: "Copy source SVG to clipboard",
-                    onclick: onCopy,
-                    disabled: hasSource ? undefined : "disabled",
-                  },
-                  [iconCopy(), m("span", isCopied ? "Copied!" : "Copy")],
                 )
               : null,
             m(
@@ -134,27 +118,38 @@ export const Sidebar: m.Component<SidebarAttrs> = {
             ),
           ]),
         ]),
+        m(".sidebar-section", [
+          m(".section-title", "View"),
+          m(".view-actions", (["tree", "code"] as const).map((mode) =>
+            m("button.view-toggle", {
+              class: optimizer.options.viewMode === mode ? "active" : "",
+              "aria-pressed": optimizer.options.viewMode === mode ? "true" : "false",
+              onclick: () => {
+                optimizer.options.viewMode = mode;
+                optimizer.persistSessionState();
+              },
+            }, mode === "tree" ? "Tree" : "Code"),
+          )),
+        ]),
         m(".sidebar-section.options", [m(Controls, { optimizer })]),
-        onToggleTheme
-          ? m(".sidebar-footer", [
-              m(".section-title", "Theme"),
+        m(".sidebar-footer", [
+          m(".section-title", "Theme"),
+          m(
+            "button.action-button",
+            { onclick: onToggleTheme, title: "Toggle theme" },
+            [
+              iconTheme(),
               m(
-                "button.action-button",
-                { onclick: onToggleTheme, title: "Toggle theme" },
-                [
-                  iconTheme(),
-                  m(
-                    "span",
-                    theme === "dark"
-                      ? "Light"
-                      : theme === "light"
-                        ? "Auto"
-                        : "Dark",
-                  ),
-                ],
+                "span",
+                theme === "dark"
+                  ? "Light"
+                  : theme === "light"
+                    ? "Auto"
+                    : "Dark",
               ),
-            ])
-          : null,
+            ],
+          ),
+        ]),
       ]),
     );
   },

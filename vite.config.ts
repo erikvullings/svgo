@@ -1,18 +1,9 @@
 import { defineConfig } from 'vite';
 
-export default defineConfig(({ mode }) => ({
+export default defineConfig({
   base: './',
   build: {
-    outDir: mode === 'procyon' ? 'dist/procyon' : 'docs',
+    outDir: 'docs',
     emptyOutDir: true
-  },
-  plugins: mode === 'procyon' ? [{
-    name: 'tree-only-procyon',
-    transformIndexHtml(html: string) {
-      return html.replace(
-        /^[ \t]*<script src="https:\/\/cdnjs\.cloudflare\.com\/ajax\/libs\/monaco-editor\/[^"]+"><\/script>\r?\n/m,
-        ''
-      );
-    }
-  }] : []
-}));
+  }
+});

@@ -4,7 +4,6 @@ import { Header } from "./components/header";
 import { EditorPanel } from "./components/editorPanel";
 import { PreviewPanel } from "./components/previewPanel";
 import { Sidebar } from "./components/sidebar";
-import { canSaveProcyonSvg, handleProcyonMessage, procyonPlugin, saveProcyonSvg } from "./procyon";
 
 let svgScale = 1;
 let panX = 0;
@@ -49,11 +48,6 @@ function clampSplitterPercent(percent: number): number {
 }
 
 function readTheme(): "dark" | "light" | "auto" {
-  if (procyonPlugin) {
-    return procyonPlugin.theme === "dark" || procyonPlugin.theme === "light"
-      ? procyonPlugin.theme
-      : "auto";
-  }
   const stored = getStoredValue(STORAGE_THEME_KEY);
   if (stored === "dark" || stored === "light" || stored === "auto") {
     return stored;
@@ -83,18 +77,15 @@ function readSplitterOrientation(): SplitOrientation {
 }
 
 let theme: "dark" | "light" | "auto" = readTheme();
-let sidebarOpen = procyonPlugin ? false : readSidebarOpen();
-let splitterPercent = procyonPlugin ? 50 : readSplitterPercent();
-let splitterOrientation: SplitOrientation = procyonPlugin ? "vertical" : readSplitterOrientation();
+let sidebarOpen = readSidebarOpen();
+let splitterPercent = readSplitterPercent();
+let splitterOrientation: SplitOrientation = readSplitterOrientation();
 let lastCopiedSvgFingerprint: string | null = null;
 let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
-let saveStatus: { kind: "saving" | "success" | "error"; message: string } | null = null;
-let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
-let settingsError: string | null = null;
 
-const showFileActions = !procyonPlugin;
-const showDownload = !procyonPlugin;
+const showFileActions = true;
+const showDownload = true;
 
 function fingerprintSvg(svg: string): string {
   const normalized = svg.trim().replace(/\s+/g, " ");
@@ -160,33 +151,6 @@ function showPasteToast(message: string): void {
   m.redraw();
 }
 
-function setSaveStatus(status: typeof saveStatus): void {
-  if (saveStatusTimer) clearTimeout(saveStatusTimer);
-  saveStatusTimer = null;
-  saveStatus = status;
-  if (status?.kind === "success") {
-    saveStatusTimer = setTimeout(() => {
-      saveStatus = null;
-      saveStatusTimer = null;
-      m.redraw();
-    }, 2800);
-  }
-  m.redraw();
-}
-
-function requestProcyonSave(): void {
-  if (!canSaveProcyonSvg(optimizer)) return;
-  setSaveStatus({ kind: "saving", message: "Saving SVG..." });
-  try {
-    saveProcyonSvg(optimizer);
-  } catch (error) {
-    setSaveStatus({
-      kind: "error",
-      message: `Save failed: ${error instanceof Error ? error.message : String(error)}`,
-    });
-  }
-}
-
 function resolveTheme(nextTheme: "dark" | "light" | "auto") {
   if (nextTheme === "auto") {
     return window.matchMedia &&
@@ -201,9 +165,8 @@ function applyTheme(nextTheme: "dark" | "light" | "auto") {
   theme = nextTheme;
   const resolved = resolveTheme(theme);
   document.body.classList.toggle("theme-light", resolved === "light");
-  if (!procyonPlugin) setStoredValue(STORAGE_THEME_KEY, theme);
+  setStoredValue(STORAGE_THEME_KEY, theme);
   optimizer.setEditorTheme(resolved);
-  if (procyonPlugin) m.redraw();
 }
 
 function toggleTheme() {
@@ -213,7 +176,7 @@ function toggleTheme() {
 
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
-  if (!procyonPlugin) setStoredValue(STORAGE_SIDEBAR_KEY, String(sidebarOpen));
+  setStoredValue(STORAGE_SIDEBAR_KEY, String(sidebarOpen));
 }
 
 function applySplitterLayout(
@@ -226,11 +189,8 @@ function applySplitterLayout(
   const normalizedPercent = clampSplitterPercent(percent);
   const safeTotal = Math.max(1, totalSize);
   const percentSplitter = (6 / safeTotal) * 100;
-  const leftPercent = procyonPlugin
-    ? normalizedPercent * (1 - percentSplitter / 100)
-    : normalizedPercent;
-  left.style.flex = `0 0 ${leftPercent}%`;
-  right.style.flex = `0 0 ${100 - leftPercent - percentSplitter}%`;
+  left.style.flex = `0 0 ${normalizedPercent}%`;
+  right.style.flex = `0 0 ${100 - normalizedPercent - percentSplitter}%`;
 
   if (orientation === "horizontal") {
     left.style.minWidth = "0";
@@ -287,7 +247,7 @@ function setupSplitter(): void {
     document.onmouseup = function () {
       document.onmousemove = null;
       document.onmouseup = null;
-      if (!procyonPlugin) setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
+      setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
     };
   };
 }
@@ -295,7 +255,7 @@ function setupSplitter(): void {
 function toggleSplitterOrientation(): void {
   splitterOrientation =
     splitterOrientation === "vertical" ? "horizontal" : "vertical";
-  if (!procyonPlugin) setStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY, splitterOrientation);
+  setStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY, splitterOrientation);
   setupSplitter();
 }
 
@@ -339,7 +299,6 @@ function zoomSvgAtCursor(factor: number, clientX: number, clientY: number): void
     applyTransform();
   };
   align();
-  // A scrollbar appearing or disappearing can resize a fitted SVG after this event.
   pendingWheelZoom = requestAnimationFrame(() => {
     pendingWheelZoom = null;
     align();
@@ -428,19 +387,19 @@ function copyToClipboard(): void {
 
 export const App: m.Component = {
   oncreate() {
-    document.body.classList.toggle("theme-procyon", Boolean(procyonPlugin));
-    if (import.meta.env.MODE !== "procyon" && !procyonPlugin) {
-      setTimeout(() => {
-        optimizer.initializeEditor();
-      }, 100);
-    }
+    setTimeout(() => {
+      optimizer.initializeEditor();
+    }, 100);
 
     applyTheme(theme);
 
     if (window.matchMedia) {
       const media = window.matchMedia("(prefers-color-scheme: dark)");
       const handleChange = () => {
-        if (theme === "auto") applyTheme(theme);
+        if (theme === "auto") {
+          applyTheme(theme);
+          m.redraw();
+        }
       };
       if (typeof media.addEventListener === "function") {
         media.addEventListener("change", handleChange);
@@ -501,29 +460,21 @@ export const App: m.Component = {
           optimizer,
           sourceSvg,
           theme,
-          onToggleTheme: procyonPlugin ? undefined : toggleTheme,
+          onToggleTheme: toggleTheme,
           open: sidebarOpen,
           showFileActions,
           showDownload,
-          onCopy: procyonPlugin ? copyToClipboard : undefined,
-          isCopied,
         }),
         m(".app-main", [
           m(Header, {
             stats: headerStats,
-            showTitle: !procyonPlugin,
             onToggleSidebar: toggleSidebar,
             canOptimize: hasSource,
             onOptimize: () => optimizer.loadOptimizedFile(),
             canCopy: hasSource,
             isCopied,
             onCopy: copyToClipboard,
-            onSave: procyonPlugin ? requestProcyonSave : undefined,
-            canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
           }),
-          settingsError
-            ? m(".settings-error-banner[role=alert][aria-live=assertive]", settingsError)
-            : null,
           m(
             ".main-content",
             {
@@ -535,7 +486,11 @@ export const App: m.Component = {
               onupdate: setupSplitter,
             },
             [
-              m(".editor-panel#left-panel", [m(EditorPanel)]),
+              m(".editor-panel#left-panel", [
+                m(EditorPanel, {
+                  sourceSvg,
+                }),
+              ]),
               m("div#dragbar.dragbar"),
               m<import("./components/previewPanel").PreviewPanelAttrs, {}>(
                 PreviewPanel,
@@ -556,17 +511,6 @@ export const App: m.Component = {
       pasteToastMessage
         ? m(".app-toast[role=status][aria-live=polite]", pasteToastMessage)
         : null,
-      saveStatus
-        ? m(
-            ".app-toast.save-status",
-            {
-              class: saveStatus.kind === "error" ? "save-error" : "",
-              role: saveStatus.kind === "error" ? "alert" : "status",
-              "aria-live": saveStatus.kind === "error" ? "assertive" : "polite",
-            },
-            saveStatus.message,
-          )
-        : null,
     ];
 
     return m("div", body);
@@ -580,49 +524,7 @@ export function initializeGlobalHandlers() {
   setupPanEvents();
   document.addEventListener("paste", handleGlobalSvgPaste);
 
-  if (procyonPlugin) {
-    window.addEventListener("message", (event) => {
-      const message = handleProcyonMessage(event, optimizer);
-      if (!message) return;
-      if (message.type === "load-svg") {
-        setSaveStatus(null);
-      } else if (message.type === "flush-settings") {
-        return;
-      } else if (message.type === "theme-change") {
-        applyTheme(message.theme);
-      } else if (message.type === "settings-result") {
-        if (message.success) {
-          settingsError = null;
-        } else {
-          settingsError = "error" in message && message.error
-            ? `Failed to save editor settings: ${message.error}`
-            : "Failed to save editor settings.";
-        }
-        m.redraw();
-      } else {
-        setSaveStatus(message.success
-          ? { kind: "success", message: "SVG saved." }
-          : {
-              kind: "error",
-              message: "error" in message && message.error
-                ? `Save failed: ${message.error}`
-                : "Save failed.",
-            });
-      }
-    });
-    window.addEventListener("keydown", (e) => {
-      if (
-        (e.metaKey || e.ctrlKey) &&
-        !e.altKey &&
-        !e.shiftKey &&
-        e.key.toLowerCase() === "s"
-      ) {
-        e.preventDefault();
-        e.stopPropagation();
-        requestProcyonSave();
-      }
-    }, true);
-  } else if (vscodeApi) {
+  if (vscodeApi) {
     window.addEventListener("message", (event) => {
       const data = event.data;
       if (!data || typeof data !== "object") return;
@@ -661,7 +563,6 @@ export function initializeGlobalHandlers() {
     }
 
     const step = 20;
-    const zoomStep = 1.1;
     switch (e.key) {
       case "ArrowUp":
         panY -= step;
@@ -677,17 +578,15 @@ export function initializeGlobalHandlers() {
         break;
       case "+":
       case "=":
-        svgScale *= zoomStep;
-        break;
+        zoomSvg(1.1);
+        return;
       case "-":
       case "_":
-        svgScale /= zoomStep;
-        break;
+        zoomSvg(1 / 1.1);
+        return;
       case "0":
-        svgScale = 1;
-        panX = 0;
-        panY = 0;
-        break;
+        resetZoom();
+        return;
       default:
         return;
     }

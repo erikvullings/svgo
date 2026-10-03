@@ -26,7 +26,6 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "build:procyon": "vite build --mode procyon",
     "preview": "vite preview",
     "start": "vite",
     "test": "vitest run"
@@ -42,7 +41,6 @@
     "@types/mithril": "2.2.9",
     "@types/node": "26.4.0",
     "jsdom": "30.0.1",
-    "monaco-editor": "0.52.2",
     "typescript": "7.0.2",
     "vite": "8.2.2",
     "vitest": "4.1.11"

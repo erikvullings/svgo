@@ -7,12 +7,10 @@ const root = document.createElement("div");
 afterEach(() => {
   m.render(root, null);
   root.remove();
-  delete window.procyonPlugin;
   vi.restoreAllMocks();
 });
 
 it("keeps the SVG point under the wheel cursor while zooming, panning and resizing", async () => {
-  window.procyonPlugin = { loadToken: "zoom-test", postMessage: vi.fn() };
   vi.resetModules();
   const { optimizer } = await import("../src/optimizer");
   const { App, initializeGlobalHandlers } = await import("../src/ui");

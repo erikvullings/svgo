@@ -23,16 +23,12 @@ const maliciousSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http:
   <circle r="5" fill="url(#local)"/>
 </svg>`;
 
-describe.each(["standalone", "Procyon"] as const)("%s SVG preview", (mode) => {
+describe("standalone SVG preview", () => {
   afterEach(() => {
-    delete window.procyonPlugin;
     document.body.replaceChildren();
   });
 
   it("renders safe artwork without executable content or external resources", async () => {
-    if (mode === "Procyon") {
-      window.procyonPlugin = { loadToken: "test", postMessage: () => {} };
-    }
     const root = document.createElement("div");
     document.body.append(root);
     m.render(root, m(PreviewPanel, {

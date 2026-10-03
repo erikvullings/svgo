@@ -1,5 +1,4 @@
 import m from "mithril";
-import { procyonPlugin } from "../procyon";
 import { sanitizePreviewSvg } from "../svgPreview";
 
 type PreviewBackground = "light" | "dark" | "checkerboard";
@@ -49,6 +48,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
       onZoomOut,
       onResetZoom,
     } = attrs;
+
     const background = previewBackground ?? theme;
 
     return m(".preview-panel#right-panel", [
@@ -56,24 +56,22 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
         m("span", "Optimized SVG"),
         previewSvg &&
           m("div.preview-controls", [
-            procyonPlugin
-              ? m("label.preview-background-control", [
-                  m("span", "Background"),
-                  m("select", {
-                    value: background,
-                    onchange: (event: Event) => {
-                      const value = (event.target as HTMLSelectElement).value;
-                      if (value === "light" || value === "dark" || value === "checkerboard") {
-                        previewBackground = value;
-                      }
-                    },
-                  }, [
-                    m("option[value=light]", "Light"),
-                    m("option[value=dark]", "Dark"),
-                    m("option[value=checkerboard]", "Checkerboard"),
-                  ]),
-                ])
-              : null,
+            m("label.preview-background-control", [
+              m("span", "Background"),
+              m("select", {
+                value: background,
+                onchange: (event: Event) => {
+                  const value = (event.target as HTMLSelectElement).value;
+                  if (value === "light" || value === "dark" || value === "checkerboard") {
+                    previewBackground = value;
+                  }
+                },
+              }, [
+                m("option[value=light]", "Light"),
+                m("option[value=dark]", "Dark"),
+                m("option[value=checkerboard]", "Checkerboard"),
+              ]),
+            ]),
             m(
               "button.preview-control-btn",
               {
@@ -90,9 +88,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
             m("button.preview-control-btn", { onclick: onResetZoom }, "Reset"),
           ]),
       ]),
-      m(".preview-container", {
-        "data-preview-background": procyonPlugin ? background : undefined,
-      }, [
+      m(".preview-container", { "data-preview-background": background }, [
         previewSvg
           ? m.trust(sanitizePreviewSvg(previewSvg))
           : m("div.preview-placeholder", "Preview will appear here"),
