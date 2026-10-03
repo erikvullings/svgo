@@ -57,7 +57,11 @@ interface Window {
   procyonPlugin?: {
     loadToken: string;
     theme?: 'light' | 'dark';
-    postMessage(message: { type: "save-svg"; svg: string }): void;
+    settings?: Partial<import('../optimizer').ProcyonOptimizerSettings>;
+    postMessage(message:
+      | { type: "save-svg"; svg: string }
+      | { type: "settings-change"; settings: import('../optimizer').ProcyonOptimizerSettings; sequence: number; flush?: true }
+    ): void;
   };
   showSaveFilePicker?: (options?: {
     suggestedName?: string;

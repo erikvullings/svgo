@@ -77,7 +77,7 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector('[title="Save SVG to Procyon"]')).toBeNull();
   });
 
-  it("retains Procyon preferences without storing or restoring SVG content or layout", async () => {
+  it("retains host-provided preferences without storing SVG content or layout", async () => {
     vi.useFakeTimers();
     const svg = '<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>';
     localStorage.setItem("svgo-state-v1", JSON.stringify({
@@ -88,35 +88,55 @@ describe("host-specific starting layout", () => {
     localStorage.setItem("svgo-sidebar-open", "true");
     localStorage.setItem("svgo-splitter-percent", "75");
     localStorage.setItem("svgo-splitter-orientation", "vertical");
-    window.procyonPlugin = { loadToken: "settings-test", theme: "light", postMessage: vi.fn() };
+    const postMessage = vi.fn();
+    const injectedSettings = {
+      precision: 3, pathPrecision: 4, removeStyling: false,
+      groupSimilarElements: false, customWidth: 320, useCustomDimensions: true,
+      viewMode: "code", sourceSvg: svg,
+    };
+    window.procyonPlugin = {
+      loadToken: "settings-test",
+      theme: "light",
+      settings: injectedSettings,
+      postMessage,
+    };
     vi.resetModules();
     const { SVGOptimizer } = await import("../src/optimizer");
-    vi.spyOn(SVGOptimizer.prototype, "canUseLocalStorage").mockReturnValue(true);
+    vi.spyOn(SVGOptimizer.prototype, "canUseLocalStorage").mockReturnValue(false);
     const first = new SVGOptimizer();
     expect(first.getSourceSvg()).toBe("");
-    expect(first.options.precision).toBe(1);
+    expect(first.options).toMatchObject({
+      precision: 3, pathPrecision: 4, removeStyling: false,
+      groupSimilarElements: false, customWidth: 320, useCustomDimensions: true,
+      viewMode: "tree",
+    });
+    expect(postMessage).not.toHaveBeenCalled();
     first.loadSvgString(svg);
+    expect(postMessage).not.toHaveBeenCalled();
     first.options.precision = 5;
-    first.options.pathPrecision = 4;
-    first.options.removeStyling = false;
-    first.options.groupSimilarElements = false;
-    first.options.customWidth = 320;
-    first.options.useCustomDimensions = true;
     first.options.viewMode = "code";
     first.persistSessionState();
 
-    const saved = localStorage.getItem("svgo-procyon-settings-v1");
-    expect(saved).not.toBeNull();
-    expect(saved).not.toContain("svg");
-    expect(saved).not.toContain("viewMode");
-    expect(JSON.parse(saved!)).toMatchObject({
-      precision: 5, pathPrecision: 4, removeStyling: false,
-      groupSimilarElements: false, customWidth: 320, useCustomDimensions: true,
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    const sent = postMessage.mock.calls[0][0];
+    expect(sent).toMatchObject({
+      type: "settings-change",
+      settings: {
+        precision: 5, pathPrecision: 4, removeStyling: false,
+        groupSimilarElements: false, customWidth: 320, useCustomDimensions: true,
+      },
     });
+    expect(Object.keys(sent.settings)).toHaveLength(15);
+    expect(JSON.stringify(sent)).not.toContain("svg");
+    expect(JSON.stringify(sent)).not.toContain("viewMode");
+    first.persistSessionState();
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(localStorage.getItem("svgo-procyon-settings-v1")).toBeNull();
     expect(JSON.parse(localStorage.getItem("svgo-state-v1")!)).toMatchObject({
       options: { precision: 0 }, sourceSvg: expect.stringContaining("old document"),
     });
 
+    window.procyonPlugin!.settings = sent.settings;
     const reopened = new SVGOptimizer();
     expect(reopened.getSourceSvg()).toBe("");
     expect(reopened.optimizedSvg).toBe("");
@@ -125,6 +145,7 @@ describe("host-specific starting layout", () => {
       groupSimilarElements: false, customWidth: 320, useCustomDimensions: true,
       viewMode: "tree",
     });
+    expect(postMessage).toHaveBeenCalledTimes(1);
     const { optimizer } = await import("../src/optimizer");
     const { App } = await import("../src/ui");
     vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();

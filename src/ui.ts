@@ -88,6 +88,7 @@ let pasteToastMessage = "";
 let pasteToastTimer: ReturnType<typeof setTimeout> | null = null;
 let saveStatus: { kind: "saving" | "success" | "error"; message: string } | null = null;
 let saveStatusTimer: ReturnType<typeof setTimeout> | null = null;
+let settingsError: string | null = null;
 
 const showFileActions = !procyonPlugin;
 const showDownload = !procyonPlugin;
@@ -478,6 +479,9 @@ export const App: m.Component = {
             onSave: procyonPlugin ? requestProcyonSave : undefined,
             canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
           }),
+          settingsError
+            ? m(".settings-error-banner[role=alert][aria-live=assertive]", settingsError)
+            : null,
           m(
             ".main-content",
             {
@@ -543,8 +547,19 @@ export function initializeGlobalHandlers() {
       if (!message) return;
       if (message.type === "load-svg") {
         setSaveStatus(null);
+      } else if (message.type === "flush-settings") {
+        return;
       } else if (message.type === "theme-change") {
         applyTheme(message.theme);
+      } else if (message.type === "settings-result") {
+        if (message.success) {
+          settingsError = null;
+        } else {
+          settingsError = "error" in message && message.error
+            ? `Failed to save editor settings: ${message.error}`
+            : "Failed to save editor settings.";
+        }
+        m.redraw();
       } else {
         setSaveStatus(message.success
           ? { kind: "success", message: "SVG saved." }

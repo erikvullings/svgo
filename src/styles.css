@@ -310,6 +310,14 @@ button,
   flex-direction: column;
 }
 
+.settings-error-banner {
+  padding: 0.5rem 1rem;
+  background: var(--error-bg);
+  border-bottom: 1px solid var(--error-border);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
 label.file-button {
   padding: 0.6rem 0.8rem;
 }

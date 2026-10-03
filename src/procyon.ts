@@ -1,9 +1,13 @@
-import type { SVGOptimizer } from "./optimizer";
+import type { ProcyonOptimizerSettings, SVGOptimizer } from "./optimizer";
 
 type ProcyonPlugin = {
   loadToken: string;
   theme?: "light" | "dark";
-  postMessage(message: { type: "save-svg"; svg: string }): void;
+  settings?: Partial<ProcyonOptimizerSettings>;
+  postMessage(message:
+    | { type: "save-svg"; svg: string }
+    | { type: "settings-change"; settings: ProcyonOptimizerSettings; sequence: number; flush?: true }
+  ): void;
 };
 
 export const procyonPlugin: ProcyonPlugin | undefined =
@@ -19,12 +23,15 @@ let documentLoaded = false;
 export type ProcyonSaveResult =
   | { type: "save-result"; success: true }
   | { type: "save-result"; success: false; error?: string };
+export type ProcyonSettingsResult =
+  | { type: "settings-result"; success: true }
+  | { type: "settings-result"; success: false; error?: string };
 export type ProcyonThemeChange = { type: "theme-change"; theme: "light" | "dark" };
 
 export function handleProcyonMessage(
   event: MessageEvent,
   optimizer: SVGOptimizer,
-): { type: "load-svg" } | ProcyonSaveResult | ProcyonThemeChange | null {
+): { type: "load-svg" } | { type: "flush-settings" } | ProcyonSaveResult | ProcyonSettingsResult | ProcyonThemeChange | null {
   if (!procyonPlugin || event.source !== window) return null;
   const data = event.data;
   if (
@@ -41,6 +48,10 @@ export function handleProcyonMessage(
   if (data.type === "theme-change" && (data.theme === "light" || data.theme === "dark")) {
     return { type: "theme-change", theme: data.theme };
   }
+  if (data.type === "flush-settings") {
+    optimizer.flushProcyonSettings();
+    return { type: "flush-settings" };
+  }
   if (
     data.type === "save-result" &&
     typeof data.success === "boolean" &&
@@ -49,6 +60,19 @@ export function handleProcyonMessage(
     return data.success
       ? { type: "save-result", success: true }
       : { type: "save-result", success: false, error: data.error };
+  }
+  if (
+    data.type === "settings-result" &&
+    typeof data.success === "boolean" &&
+    (data.error === undefined || typeof data.error === "string") &&
+    typeof data.sequence === "number" &&
+    Number.isSafeInteger(data.sequence) &&
+    data.sequence > 0
+  ) {
+    if (!optimizer.acknowledgeProcyonSettings(data.success, data.sequence)) return null;
+    return data.success
+      ? { type: "settings-result", success: true }
+      : { type: "settings-result", success: false, error: data.error };
   }
   return null;
 }

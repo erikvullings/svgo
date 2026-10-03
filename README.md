@@ -52,22 +52,46 @@ standalone Open action and app title, and places Save in the header and Copy
 in the sidebar menu. Standalone and VS Code keep their existing defaults.
 
 Before loading the app, the isolated host injects
-`window.procyonPlugin = { loadToken, theme, postMessage }`. `loadToken` is an
+`window.procyonPlugin = { loadToken, theme, settings, postMessage }`. `loadToken` is an
 unpredictable, nonempty string unique to each plugin window; `postMessage`
 accepts `{ type: "save-svg", svg: string }`; `theme` is the effective Procyon
-`"light"` or `"dark"` theme. After the window loads, the host delivers
+`"light"` or `"dark"` theme. `settings` is an optional partial object of the
+15 optimization settings listed below, loaded from trusted host storage before
+the app starts. After the window loads, the host delivers
 `{ type: "load-svg", svg: string, uri: string, loadToken }` via
 `window.postMessage` executed **inside that window**. The app accepts loads
 only from the same window with the matching token. The host owns the URI and
 must save the `svg` from an explicit Save button or Cmd/Ctrl+S to that document.
 Editing and loading do not send save messages. The host should restrict its
-message bridge to `save-svg` and scope it to the current document/window.
+message bridge to `save-svg` and `settings-change` and scope it to the current
+document/window.
 After each save attempt, the host reports
 `{ type: "save-result", success: boolean, error?: string, loadToken }` through
 the same in-window `postMessage` path. A failed save displays the host's error
 (or a generic failure) until the next save or document load.
-Procyon stores optimization settings (general/path precision, cleanup toggles,
-grouping options, autocrop, and custom size) under `svgo-procyon-settings-v1`.
+When an optimization setting changes, SVGO sends
+`{ type: "settings-change", settings, sequence }` through the same trusted
+bridge, containing the complete 15-field settings snapshot (not SVG content).
+It coalesces further changes while waiting for a matching acknowledgment, and
+sends no settings message at startup or for document edits alone. The host must
+validate and persist this snapshot outside the incognito WebView, rejecting
+unknown keys, and inject it into subsequent plugin windows. The fields are
+`precision` (integer 0-5, default 1), `pathPrecision` (integer 0-5, default 2),
+`customWidth` and `customHeight` (integers 1-100000, default 100), and booleans
+`removeTspan`, `removeStyling`, `trimText`, `autoAutocrop`,
+`useCustomDimensions`, `removeDefaultValues`, `removeFontFamily`,
+`removeFontSize`, `convertSodipodiArcs`, `groupSimilarElements`, and
+`groupTextElementsAtEnd`. Incoming partial settings use defaults for omitted
+fields. The host reports each write with a token-bound
+`{ type: "settings-result", success: boolean, error?: string, loadToken, sequence }`
+through the same in-window message path; failures appear as a persistent
+banner until a successful write. To close a panel, the host sends the trusted
+`{ type: "flush-settings", loadToken }` message; SVGO immediately sends the
+latest snapshot with a new `sequence` and `flush: true`, even if another write
+is outstanding. The host processes writes in sequence order (discarding older
+writes) and waits for that flush request to finish before closing the child.
+Sequences start at 1 for each panel. Procyon does not depend on localStorage
+for preference retention.
 The host sends `{ type: "theme-change", theme, loadToken }` through the same
 in-window message path when Procyon's effective theme changes. Without a host
 theme, the plugin follows the system color scheme; SVGO uses its own light/dark

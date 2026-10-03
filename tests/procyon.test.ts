@@ -190,6 +190,87 @@ describe("Procyon host adapter", () => {
     });
   });
 
+  it("serializes preference changes and flushes the latest snapshot before close", async () => {
+    const { SVGOptimizer: HostOptimizer } = await import("../src/optimizer");
+    const { handleProcyonMessage } = await import("../src/procyon");
+    const optimizer = new HostOptimizer();
+    const receive = (data: unknown, source: MessageEventSource | null = window) =>
+      handleProcyonMessage(new MessageEvent("message", { data, source }), optimizer);
+    expect(postMessage).not.toHaveBeenCalled();
+    optimizer.options.precision = 3;
+    optimizer.persistSessionState();
+    expect(postMessage).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      type: "settings-change", sequence: 1, settings: expect.objectContaining({ precision: 3 }),
+    }));
+    optimizer.options.precision = 4;
+    optimizer.persistSessionState();
+    optimizer.options.precision = 5;
+    optimizer.persistSessionState();
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(receive({ type: "settings-result", success: true, sequence: 1, loadToken: "wrong" })).toBeNull();
+    expect(receive({ type: "settings-result", success: true, sequence: 1, loadToken: "test-window-token" }, null)).toBeNull();
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(receive({ type: "settings-result", success: true, sequence: 1, loadToken: "test-window-token" })).toEqual({
+      type: "settings-result", success: true,
+    });
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(postMessage.mock.calls[1][0]).toMatchObject({
+      type: "settings-change", sequence: 2, settings: { precision: 5 },
+    });
+
+    optimizer.options.precision = 2;
+    optimizer.persistSessionState();
+    expect(receive({ type: "flush-settings", loadToken: "test-window-token" }, null)).toBeNull();
+    expect(receive({ type: "flush-settings", loadToken: "wrong" })).toBeNull();
+    expect(postMessage).toHaveBeenCalledTimes(2);
+    expect(receive({ type: "flush-settings", loadToken: "test-window-token" })).toEqual({
+      type: "flush-settings",
+    });
+    expect(postMessage.mock.calls[2][0]).toMatchObject({
+      type: "settings-change", sequence: 3, flush: true, settings: { precision: 2 },
+    });
+    expect(Object.keys(postMessage.mock.calls[2][0].settings)).toHaveLength(15);
+    expect(JSON.stringify(postMessage.mock.calls[2][0])).not.toContain("svg");
+    expect(receive({ type: "settings-result", success: true, sequence: 2, loadToken: "test-window-token" })).toBeNull();
+    expect(receive({ type: "settings-result", success: true, sequence: 3, loadToken: "test-window-token" })).toEqual({
+      type: "settings-result", success: true,
+    });
+    expect(postMessage).toHaveBeenCalledTimes(3);
+  });
+
+  it("shows host settings failures independently from document saves", async () => {
+    vi.useFakeTimers();
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    const { optimizer } = await import("../src/optimizer");
+    vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    const root = document.createElement("div");
+    document.body.append(root);
+    try {
+      m.render(root, m(App));
+      initializeGlobalHandlers();
+      optimizer.options.precision = 3;
+      optimizer.persistSessionState();
+      const send = (data: unknown) => {
+        window.dispatchEvent(new MessageEvent("message", { data, source: window }));
+        m.render(root, m(App));
+      };
+      send({ type: "settings-result", success: false, error: "No storage", sequence: 1, loadToken: "wrong" });
+      expect(root.querySelector(".settings-error-banner")).toBeNull();
+      send({ type: "settings-result", success: false, error: "No storage", sequence: 1, loadToken: "test-window-token" });
+      expect(root.querySelector('[role="alert"]')?.textContent).toBe("Failed to save editor settings: No storage");
+      send({ type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" });
+      send({ type: "save-result", success: true, loadToken: "test-window-token" });
+      expect(root.querySelector(".settings-error-banner")).not.toBeNull();
+      optimizer.persistSessionState();
+      expect(postMessage).toHaveBeenCalledTimes(2);
+      send({ type: "settings-result", success: true, sequence: 2, loadToken: "test-window-token" });
+      expect(root.querySelector(".settings-error-banner")).toBeNull();
+    } finally {
+      m.render(root, null);
+      root.remove();
+    }
+  });
+
   it("follows trusted host theme changes without saving a local Procyon theme", async () => {
     vi.useFakeTimers();
     window.procyonPlugin!.theme = "dark";

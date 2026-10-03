@@ -60,6 +60,8 @@ type PersistedOptions = Pick<
   | "viewMode"
 >;
 
+export type ProcyonOptimizerSettings = Omit<PersistedOptions, "viewMode">;
+
 type PersistedState = {
   sourceSvg: string;
   options: PersistedOptions;
@@ -73,7 +75,6 @@ const PRESERVE_ATTR_PREFIXES = ["data-", "aria-"];
 const BLOCKED_ATTR_PREFIXES = ["inkscape:", "sodipodi:"];
 const RESERVED_ATTR_NAME = "data-cx-id";
 const PERSISTED_STATE_KEY = "svgo-state-v1";
-const PROCYON_SETTINGS_KEY = "svgo-procyon-settings-v1";
 
 class SVGOptimizer {
   originalSvg: string;
@@ -90,6 +91,10 @@ class SVGOptimizer {
   copyStatus: "idle" | "copied";
   copyResetTimer: ReturnType<typeof setTimeout> | null;
   persistenceEnabled: boolean;
+  lastProcyonSettings: string | null;
+  procyonSettingsInFlight: { serialized: string; sequence: number } | null;
+  queuedProcyonSettings: { serialized: string; settings: ProcyonOptimizerSettings } | null;
+  procyonSettingsSequence: number;
 
   constructor() {
     this.originalSvg = "";
@@ -132,8 +137,14 @@ class SVGOptimizer {
     this.isRestoringHistory = false;
     this.copyStatus = "idle";
     this.copyResetTimer = null;
-    this.persistenceEnabled = this.canUseLocalStorage();
+    this.persistenceEnabled = Boolean(procyonPlugin) || this.canUseLocalStorage();
     this.restoreFromStorage();
+    this.lastProcyonSettings = procyonPlugin
+      ? JSON.stringify(this.getProcyonSettings())
+      : null;
+    this.procyonSettingsInFlight = null;
+    this.queuedProcyonSettings = null;
+    this.procyonSettingsSequence = 0;
     // Initialize with empty state
     this.saveToHistory();
 
@@ -187,6 +198,11 @@ class SVGOptimizer {
       groupTextElementsAtEnd: this.options.groupTextElementsAtEnd,
       viewMode: this.options.viewMode,
     };
+  }
+
+  getProcyonSettings(): ProcyonOptimizerSettings {
+    const { viewMode: _viewMode, ...settings } = this.getPersistedOptions();
+    return settings;
   }
 
   applyPersistedOptions(raw: Partial<PersistedOptions>): void {
@@ -277,13 +293,12 @@ class SVGOptimizer {
 
     try {
       if (procyonPlugin) {
-        const raw = localStorage.getItem(PROCYON_SETTINGS_KEY);
-        if (!raw) return;
-        const parsed: unknown = JSON.parse(raw);
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          throw new Error("Invalid Procyon settings");
+        const settings: unknown = procyonPlugin.settings;
+        if (settings === undefined) return;
+        if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+          throw new Error("Invalid host-provided Procyon settings");
         }
-        this.applyPersistedOptions(parsed as Partial<PersistedOptions>);
+        this.applyPersistedOptions(settings as Partial<ProcyonOptimizerSettings>);
         this.options.viewMode = "tree";
         return;
       }
@@ -302,20 +317,32 @@ class SVGOptimizer {
         void this.optimizeSvg();
       }
     } catch (error) {
-      console.warn("Failed to restore SVGO state from localStorage:", error);
+      console.warn(
+        procyonPlugin
+          ? "Failed to restore Procyon settings from host:"
+          : "Failed to restore SVGO state from localStorage:",
+        error,
+      );
     }
   }
 
   persistState(): void {
     if (!this.persistenceEnabled) return;
 
-    try {
-      if (procyonPlugin) {
-        const { viewMode: _viewMode, ...settings } = this.getPersistedOptions();
-        localStorage.setItem(PROCYON_SETTINGS_KEY, JSON.stringify(settings));
-        return;
+    if (procyonPlugin) {
+      const settings = this.getProcyonSettings();
+      const serialized = JSON.stringify(settings);
+      if (this.procyonSettingsInFlight) {
+        this.queuedProcyonSettings = serialized === this.procyonSettingsInFlight.serialized
+          ? null
+          : { serialized, settings };
+      } else if (serialized !== this.lastProcyonSettings) {
+        this.sendProcyonSettings(settings, serialized);
       }
+      return;
+    }
 
+    try {
       const state: PersistedState = {
         sourceSvg: this.getSourceSvg() || "",
         options: this.getPersistedOptions(),
@@ -324,6 +351,44 @@ class SVGOptimizer {
     } catch (error) {
       console.warn("Failed to persist SVGO state to localStorage:", error);
     }
+  }
+
+  sendProcyonSettings(
+    settings: ProcyonOptimizerSettings,
+    serialized: string,
+    flush = false,
+  ): void {
+    if (!procyonPlugin) return;
+    const sequence = ++this.procyonSettingsSequence;
+    this.procyonSettingsInFlight = { serialized, sequence };
+    try {
+      procyonPlugin.postMessage({
+        type: "settings-change", settings, sequence,
+        ...(flush ? { flush: true as const } : {}),
+      });
+    } catch (error) {
+      this.procyonSettingsInFlight = null;
+      console.warn("Failed to send Procyon settings to host:", error);
+    }
+  }
+
+  flushProcyonSettings(): void {
+    if (!procyonPlugin) return;
+    this.queuedProcyonSettings = null;
+    const settings = this.getProcyonSettings();
+    this.sendProcyonSettings(settings, JSON.stringify(settings), true);
+  }
+
+  acknowledgeProcyonSettings(success: boolean, sequence: number): boolean {
+    if (!this.procyonSettingsInFlight || sequence !== this.procyonSettingsInFlight.sequence) {
+      return false;
+    }
+    if (success) this.lastProcyonSettings = this.procyonSettingsInFlight.serialized;
+    this.procyonSettingsInFlight = null;
+    const pending = this.queuedProcyonSettings;
+    this.queuedProcyonSettings = null;
+    if (pending) this.sendProcyonSettings(pending.settings, pending.serialized);
+    return true;
   }
 
   persistSessionState(): void {
