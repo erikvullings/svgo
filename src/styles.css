@@ -59,6 +59,8 @@ body.theme-light {
 }
 
 body.theme-procyon {
+  --procyon-raised: #252d38;
+  --procyon-canvas: #f7f8fa;
   --bg: #1b2129;
   --panel: #1b2129;
   --panel-2: #252e39;
@@ -74,6 +76,8 @@ body.theme-procyon {
 }
 
 body.theme-procyon.theme-light {
+  --procyon-raised: #ffffff;
+  --procyon-canvas: #f4f6f8;
   --bg: #ffffff;
   --panel: #ffffff;
   --panel-2: #f3f5f8;
@@ -104,6 +108,11 @@ body {
   justify-content: space-between;
   align-items: center;
   gap: 1rem;
+}
+
+body.theme-procyon .header,
+body.theme-procyon .preview-container {
+  background: var(--procyon-raised);
 }
 
 .header-left {
@@ -640,6 +649,12 @@ button:hover,
   background: var(--preview-bg);
 }
 
+body.theme-procyon .preview-container > svg,
+body.theme-procyon .preview-container .preview-svg {
+  border: 0;
+  background-color: var(--procyon-canvas);
+}
+
 .preview-container > svg.preview-svg-auto-size,
 .preview-container .preview-svg.preview-svg-auto-size {
   width: 100%;
@@ -673,6 +688,19 @@ button:hover,
   width: 100%;
   height: 6px;
   cursor: row-resize;
+}
+
+body.theme-procyon .dragbar {
+  background: color-mix(in srgb, var(--procyon-raised) 85%, var(--border));
+}
+
+@media (max-width: 640px) {
+  body.theme-procyon .stats {
+    min-width: 0;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 0.35rem 0.75rem;
+  }
 }
 
 #left-panel {

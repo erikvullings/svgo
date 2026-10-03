@@ -96,7 +96,9 @@ The host sends `{ type: "theme-change", theme, loadToken }` through the same
 in-window message path when Procyon's effective theme changes. Without a host
 theme, the plugin follows the system color scheme. Procyon mode uses the host's
 surface, text, border, and accent colors for its light/dark palettes; standalone
-SVGO keeps its existing colors. Procyon does not read or store
+SVGO keeps its existing colors. In Procyon, the toolbar and preview work area
+use a raised surface, while the SVG canvas remains neutral and borderless; SVG
+backgrounds painted by the document are preserved. Procyon does not read or store
 SVGO's standalone theme preference, SVG content, document URIs, history, or
 view mode. Every new panel starts in Tree mode with the sidebar closed and an
 equal top/bottom split. Changes to the sidebar and split remain session-local
