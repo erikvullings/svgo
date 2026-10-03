@@ -272,6 +272,10 @@ button,
   border-right: 0;
 }
 
+body.theme-procyon .sidebar {
+  transition: none;
+}
+
 .sidebar-inner {
   display: flex;
   flex-direction: column;
@@ -545,10 +549,16 @@ button:hover,
 
 body.theme-procyon .editor-container {
   padding-top: 0;
+  background: var(--panel-2);
 }
 
 body.theme-procyon .editor-container #editor {
-  top: 0;
+  top: 6px;
+  bottom: 6px;
+}
+
+body.theme-procyon #editor .monaco-editor {
+  outline: none;
 }
 
 .monaco-editor .lineHighlight,
@@ -747,6 +757,8 @@ body.theme-procyon .dragbar {
 }
 
 body.theme-procyon .tree-view {
+  top: 6px;
+  bottom: 6px;
   padding: 0;
 }
 

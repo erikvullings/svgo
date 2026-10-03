@@ -454,6 +454,9 @@ class SVGOptimizer {
               minimap: { enabled: false },
               wordWrap: "on",
               renderLineHighlight: "none",
+              ...(procyonPlugin
+                ? { lineNumbersMinChars: 2, lineDecorationsWidth: 8 }
+                : {}),
             });
 
             this.editor.onDidChangeModelContent(() => {

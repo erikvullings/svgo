@@ -53,6 +53,10 @@ sidebar menu, which closes after selection. Procyon hides the standalone
 Source SVG header, Open action, and app title, and places Save in the header
 and Copy in the sidebar menu. Standalone and VS Code keep their existing
 defaults.
+The Procyon Code and Tree views retain a small vertical inset; Code uses a
+compact line-number gutter and no Monaco focus outline. The sidebar closes
+without a width animation so Monaco's layout and pointer coordinates remain
+stable when switching views.
 
 Before loading the app, the isolated host injects
 `window.procyonPlugin = { loadToken, theme, settings, postMessage }`. `loadToken` is an

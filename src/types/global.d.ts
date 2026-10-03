@@ -33,6 +33,8 @@ interface MonacoApi {
         minimap: { enabled: boolean };
         wordWrap: 'on' | 'off' | 'bounded';
         renderLineHighlight: 'none' | 'line' | 'all' | 'gutter';
+        lineNumbersMinChars?: number;
+        lineDecorationsWidth?: number;
       }
     ) => MonacoEditorInstance;
   };
