@@ -12,6 +12,7 @@ let panY = 0;
 let isPanning = false;
 let startX = 0;
 let startY = 0;
+let pendingWheelZoom: number | null = null;
 
 const STORAGE_THEME_KEY = "svgo-theme";
 const STORAGE_SIDEBAR_KEY = "svgo-sidebar-open";
@@ -19,6 +20,8 @@ const STORAGE_SPLITTER_KEY = "svgo-splitter-percent";
 const STORAGE_SPLITTER_ORIENTATION_KEY = "svgo-splitter-orientation";
 const SPLITTER_MIN_PERCENT = 10;
 const SPLITTER_MAX_PERCENT = 90;
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 10;
 
 type SplitOrientation = "vertical" | "horizontal";
 
@@ -306,11 +309,45 @@ function applyTransform(): void {
 }
 
 function zoomSvg(factor: number): void {
-  svgScale *= factor;
+  if (pendingWheelZoom !== null) cancelAnimationFrame(pendingWheelZoom);
+  pendingWheelZoom = null;
+  svgScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, svgScale * factor));
   applyTransform();
 }
 
+function zoomSvgAtCursor(factor: number, clientX: number, clientY: number): void {
+  const svg = document.querySelector<SVGSVGElement>(".preview-container svg");
+  if (!svg) return;
+  const before = svg.getScreenCTM();
+  if (!before) return;
+
+  const cursor = svg.createSVGPoint();
+  cursor.x = clientX;
+  cursor.y = clientY;
+  const point = cursor.matrixTransform(before.inverse());
+  const previousScale = svgScale;
+  zoomSvg(factor);
+  if (svgScale === previousScale) return;
+
+  const align = () => {
+    const after = svg.getScreenCTM();
+    if (!after) return;
+    const movedPoint = point.matrixTransform(after);
+    panX += clientX - movedPoint.x;
+    panY += clientY - movedPoint.y;
+    applyTransform();
+  };
+  align();
+  // A scrollbar appearing or disappearing can resize a fitted SVG after this event.
+  pendingWheelZoom = requestAnimationFrame(() => {
+    pendingWheelZoom = null;
+    align();
+  });
+}
+
 function resetZoom(): void {
+  if (pendingWheelZoom !== null) cancelAnimationFrame(pendingWheelZoom);
+  pendingWheelZoom = null;
   svgScale = 1;
   panX = 0;
   panY = 0;
@@ -324,6 +361,8 @@ function setupPanEvents(): void {
   if (!container) return;
 
   container.addEventListener("mousedown", (e: MouseEvent) => {
+    if (pendingWheelZoom !== null) cancelAnimationFrame(pendingWheelZoom);
+    pendingWheelZoom = null;
     isPanning = true;
     startX = e.clientX - panX;
     startY = e.clientY - panY;
@@ -352,8 +391,7 @@ function setupPanEvents(): void {
     (e: WheelEvent) => {
       e.preventDefault();
       const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      svgScale *= delta;
-      applyTransform();
+      zoomSvgAtCursor(delta, e.clientX, e.clientY);
     },
     { passive: false },
   );
