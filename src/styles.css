@@ -58,6 +58,36 @@ body.theme-light {
   --highlight-yellow: #f9a825;
 }
 
+body.theme-procyon {
+  --bg: #1b2129;
+  --panel: #1b2129;
+  --panel-2: #252e39;
+  --border: #485463;
+  --text: #d3dae3;
+  --text-muted: #a6b2c1;
+  --accent: #79b8ff;
+  --accent-hover: #a2cfff;
+  --button-text: #1b2129;
+  --input-bg: #252e39;
+  --input-border: #485463;
+  --preview-bg: #1b2129;
+}
+
+body.theme-procyon.theme-light {
+  --bg: #ffffff;
+  --panel: #ffffff;
+  --panel-2: #f3f5f8;
+  --border: #c8ced8;
+  --text: #344054;
+  --text-muted: #667085;
+  --accent: #075ea8;
+  --accent-hover: #064d8a;
+  --button-text: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #c8ced8;
+  --preview-bg: #ffffff;
+}
+
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   background: var(--bg);

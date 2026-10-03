@@ -31,6 +31,7 @@ describe("host-specific starting layout", () => {
     document.body.append(root);
     m.render(root, m(App));
 
+    expect(document.body.classList.contains("theme-procyon")).toBe(true);
     expect(optimizer.options.viewMode).toBe("tree");
     expect(root.querySelector(".tree-view")).not.toBeNull();
     expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
@@ -67,6 +68,7 @@ describe("host-specific starting layout", () => {
     document.body.append(root);
     m.render(root, m(App));
 
+    expect(document.body.classList.contains("theme-procyon")).toBe(false);
     expect(optimizer.options.viewMode).toBe("code");
     expect(root.querySelector(".sidebar")?.classList.contains("open")).toBe(true);
     expect(root.querySelector(".main-content")?.classList.contains("is-vertical")).toBe(true);
