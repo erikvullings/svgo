@@ -121,7 +121,7 @@ class SVGOptimizer {
       convertSodipodiArcs: true,
       groupSimilarElements: true,
       groupTextElementsAtEnd: false,
-      viewMode: procyonPlugin ? "tree" : "code",
+      viewMode: procyonPlugin || import.meta.env.MODE === "procyon" ? "tree" : "code",
       selectedElementPath: null, // JSON path or similar to track selected element
       treeDoc: null, // Parsed DOM for the Tree View
       isUpdatingFromTree: false, // Flag to prevent redundant re-parsing
@@ -422,12 +422,11 @@ class SVGOptimizer {
   }
 
   async initializeEditor(): Promise<void> {
+    if (import.meta.env.MODE === "procyon") return;
     return new Promise<void>((resolve) => {
       require.config({
         paths: {
-          vs: import.meta.env.MODE === "procyon"
-            ? "./monaco/vs"
-            : "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs",
+          vs: "https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs",
         },
       });
       require(["vs/editor/editor.main"], () => {
@@ -454,9 +453,6 @@ class SVGOptimizer {
               minimap: { enabled: false },
               wordWrap: "on",
               renderLineHighlight: "none",
-              ...(procyonPlugin
-                ? { lineNumbersMinChars: 2, lineDecorationsWidth: 8 }
-                : {}),
             });
 
             this.editor.onDidChangeModelContent(() => {
@@ -495,6 +491,7 @@ class SVGOptimizer {
   }
 
   applyEditorTheme(): void {
+    if (import.meta.env.MODE === "procyon") return;
     if (!this.editor) return;
     if (typeof monaco === "undefined") return;
     const themeName = this.editorTheme === "dark" ? "vs-dark" : "vs";

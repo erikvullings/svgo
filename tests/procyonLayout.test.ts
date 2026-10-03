@@ -35,6 +35,7 @@ describe("host-specific starting layout", () => {
     expect(document.body.classList.contains("theme-procyon")).toBe(true);
     expect(optimizer.options.viewMode).toBe("tree");
     expect(root.querySelector(".tree-view")).not.toBeNull();
+    expect(root.querySelector("#editor")).toBeNull();
     expect(root.querySelector(".editor-panel .panel-header")).toBeNull();
     expect(root.querySelector(".tree-layout.inspector-collapsed")).not.toBeNull();
     expect(root.querySelector(".properties-inspector")).toBeNull();
@@ -65,8 +66,9 @@ describe("host-specific starting layout", () => {
     root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
     m.render(root, m(App));
     expect(root.querySelector(".sidebar")?.classList.contains("open")).toBe(true);
-    expect(root.querySelector(".sidebar [title='Tree view']")?.getAttribute("aria-pressed")).toBe("true");
-    expect(root.querySelector(".sidebar [title='Code view']")?.getAttribute("aria-pressed")).toBe("false");
+    expect(root.querySelector(".sidebar [title='Tree view']")).toBeNull();
+    expect(root.querySelector(".sidebar [title='Code view']")).toBeNull();
+    expect(root.querySelector(".sidebar .section-title")?.textContent).not.toBe("View");
     expect(root.querySelector(".action-button.file-button")).toBeNull();
     expect(root.querySelector(".sidebar [title='Copy source SVG to clipboard']")).not.toBeNull();
     expect(root.querySelector(".sidebar [title='Save SVG to Procyon']")).toBeNull();
@@ -221,46 +223,9 @@ describe("host-specific starting layout", () => {
     expect(reopened.options.viewMode).toBe("tree");
   });
 
-  it("lays out Monaco after switching a hosted document from Tree to Code", async () => {
+  it("keeps Procyon Tree-only without ever initializing Monaco", async () => {
     vi.useFakeTimers();
-    window.procyonPlugin = { loadToken: "code-layout", postMessage: vi.fn() };
-    vi.resetModules();
-    const { optimizer } = await import("../src/optimizer");
-    const { App } = await import("../src/ui");
-    vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
-    const layout = vi.fn();
-    optimizer.editor = {
-      getValue: () => '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
-      setValue: vi.fn(),
-      onDidChangeModelContent: vi.fn(),
-      layout,
-    };
-    optimizer.editorReady = true;
-    document.body.append(root);
-    m.render(root, m(App));
-    expect(layout).not.toHaveBeenCalled();
-    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
-    m.render(root, m(App));
-    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
-    m.render(root, m(App));
-    expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
-    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(false);
-    expect(layout).toHaveBeenCalledOnce();
-    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
-    m.render(root, m(App));
-    root.querySelector<HTMLButtonElement>('[title="Tree view"]')?.click();
-    m.render(root, m(App));
-    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(true);
-    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
-    m.render(root, m(App));
-    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
-    m.render(root, m(App));
-    expect(layout).toHaveBeenCalledTimes(2);
-  });
-
-  it("does not initialize Monaco in the hidden Procyon Tree view", async () => {
-    vi.useFakeTimers();
-    window.procyonPlugin = { loadToken: "deferred-editor", postMessage: vi.fn() };
+    window.procyonPlugin = { loadToken: "tree-only", postMessage: vi.fn() };
     vi.resetModules();
     const { optimizer } = await import("../src/optimizer");
     const { App } = await import("../src/ui");
@@ -272,11 +237,59 @@ describe("host-specific starting layout", () => {
 
     root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
     m.render(root, m(App));
-    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
+    expect(root.querySelector('[title="Code view"]')).toBeNull();
+    expect(root.querySelector('[title="Tree view"]')).toBeNull();
+    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
     m.render(root, m(App));
-    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(false);
-    expect(initializeEditor).toHaveBeenCalledOnce();
+    expect(root.querySelector("#editor")).toBeNull();
+    expect(root.querySelector(".tree-view")).not.toBeNull();
     m.render(root, m(App));
-    expect(initializeEditor).toHaveBeenCalledOnce();
+    expect(initializeEditor).not.toHaveBeenCalled();
+  });
+
+  it("saves a Tree edit and refreshes the preview without a Code editor", async () => {
+    vi.useFakeTimers();
+    const postMessage = vi.fn();
+    window.procyonPlugin = { loadToken: "tree-save", postMessage };
+    vi.resetModules();
+    const { optimizer } = await import("../src/optimizer");
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    const initializeEditor = vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    document.body.append(root);
+    m.render(root, m(App));
+    initializeGlobalHandlers();
+    window.dispatchEvent(new MessageEvent("message", {
+      data: {
+        type: "load-svg",
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" fill="#ff0000"/></svg>',
+        uri: "file:///tree.svg",
+        loadToken: "tree-save",
+      },
+      source: window,
+    }));
+    m.render(root, m(App));
+    const before = optimizer.getPreviewSvg();
+    const fill = Array.from(root.querySelectorAll(".attribute")).find(
+      (node) => node.querySelector(".attr-name")?.textContent === "fill",
+    );
+    expect(fill).toBeDefined();
+    fill!.querySelector(".attr-value-display")?.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+    m.render(root, m(App));
+    const input = root.querySelector<HTMLInputElement>(".attr-value-input");
+    expect(input).not.toBeNull();
+    input!.value = "#00ff00";
+    input!.dispatchEvent(new Event("input", { bubbles: true }));
+    m.render(root, m(App));
+
+    expect(optimizer.getSourceSvg()).toContain('fill="#00ff00"');
+    expect(optimizer.getPreviewSvg()).not.toBe(before);
+    expect(root.querySelector(".preview-container svg")).not.toBeNull();
+    expect(root.querySelector("#editor")).toBeNull();
+    expect(initializeEditor).not.toHaveBeenCalled();
+    expect(postMessage.mock.calls.filter(([message]) => message.type === "save-svg")).toHaveLength(0);
+    root.querySelector<HTMLButtonElement>('[title="Save SVG to Procyon"]')?.click();
+    expect(postMessage.mock.calls.filter(([message]) => message.type === "save-svg")).toEqual([
+      [expect.objectContaining({ type: "save-svg", svg: expect.stringContaining('fill="#00ff00"') })],
+    ]);
   });
 });

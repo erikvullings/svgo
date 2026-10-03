@@ -43,21 +43,16 @@ pnpm build
 ## Procyon plugin build
 
 Run `pnpm build:procyon` to produce a self-contained web app at `dist/procyon/`
-(entry point `dist/procyon/index.html`). This build includes Monaco locally,
-unlike the standalone and VS Code builds, which retain their existing CDN setup.
-Package the complete directory; it does not need network access for the editor.
+(entry point `dist/procyon/index.html`). This build omits the Code view and
+Monaco assets; standalone and VS Code retain their existing CDN-based Code
+editor. Package the complete directory; the Tree editor needs no network access.
 When hosted by Procyon, the app starts in Tree mode with the sidebar closed
 and the Properties inspector collapsed to a side rail. The tree/editor sits
-above the SVG preview at equal height; Code and Tree are selected from the
-sidebar menu, which closes after selection. Procyon hides the standalone
+above the SVG preview at equal height. Procyon has no Code view or view switch;
+the sidebar menu contains optimization actions. Procyon hides the standalone
 Source SVG header, Open action, and app title, and places Save in the header
 and Copy in the sidebar menu. Standalone and VS Code keep their existing
-defaults.
-The Procyon Code and Tree views retain a small vertical inset; Code uses a
-compact line-number gutter and no Monaco focus outline. The sidebar closes
-without a width animation so Monaco's layout and pointer coordinates remain
-stable when switching views. Monaco is initialized only after Code becomes
-visible, avoiding a zero-sized editor measurement during Tree-first startup.
+defaults. The Procyon Tree view retains a small vertical inset.
 
 Before loading the app, the isolated host injects
 `window.procyonPlugin = { loadToken, theme, settings, postMessage }`. `loadToken` is an
@@ -117,7 +112,7 @@ inserting it into the DOM. Scripts, event handlers, foreignObject, external
 references, and unsafe styles are removed from the rendered copy; the editable
 source and Save payload remain unchanged. The host must still enforce a CSP
 that blocks external resource origins and untrusted scripts while allowing
-local assets and Monaco's blob worker.
+local assets.
 
 ## VS Code Extension: Use The App In VS Code
 

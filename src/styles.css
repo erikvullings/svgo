@@ -552,15 +552,6 @@ body.theme-procyon .editor-container {
   background: var(--panel-2);
 }
 
-body.theme-procyon .editor-container #editor {
-  top: 6px;
-  bottom: 6px;
-}
-
-body.theme-procyon #editor .monaco-editor {
-  outline: none;
-}
-
 .monaco-editor .lineHighlight,
 .monaco-editor .lineHighlightBorder {
   background: transparent !important;
@@ -825,12 +816,6 @@ body.theme-procyon .properties-inspector {
   body.theme-procyon .tree-layout:not(.inspector-collapsed) {
     grid-template-columns: minmax(0, 1fr) 28px minmax(0, 55%);
   }
-}
-
-body.theme-procyon .view-mode-button[aria-pressed="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--button-text);
 }
 
 .inspector-header {

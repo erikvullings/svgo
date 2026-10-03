@@ -3,37 +3,12 @@ import { optimizer } from "../optimizer";
 import { procyonPlugin } from "../procyon";
 import { TreeView } from "../treeView";
 
-export type EditorPanelAttrs = {
-  sourceSvg: string;
-};
-
-let editorWasVisible = false;
-let editorInitializationStarted = false;
-let editorInitializationError = false;
-
-function layoutVisibleEditor(): void {
-  const codeVisible = optimizer.options.viewMode === "code";
-  if (procyonPlugin && codeVisible && !optimizer.editorReady && !editorInitializationStarted) {
-    editorInitializationStarted = true;
-    void optimizer.initializeEditor().catch((error: unknown) => {
-      editorInitializationError = true;
-      console.error("Failed to initialize SVG code editor:", error);
-      m.redraw();
-    });
-  }
-  const visible = optimizer.editorReady && codeVisible;
-  if (procyonPlugin && visible && !editorWasVisible) {
-    optimizer.editor?.layout();
-  }
-  editorWasVisible = visible;
-}
-
-export const EditorPanel: m.Component<EditorPanelAttrs> = {
-  view({ attrs }) {
-    const { sourceSvg } = attrs;
+export const EditorPanel: m.Component = {
+  view() {
+    const showCodeEditor = import.meta.env.MODE !== "procyon" && !procyonPlugin;
 
     return m(".editor-panel", [
-      !procyonPlugin ? m(".panel-header", [
+      showCodeEditor ? m(".panel-header", [
         m("span", "Source SVG"),
         m("div.editor-actions", [
           m(
@@ -61,29 +36,21 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
         ]),
       ]) : null,
       m(".editor-container", [
-        m("div#editor", {
-          oncreate: layoutVisibleEditor,
-          onupdate: layoutVisibleEditor,
-          onremove: () => {
-            editorWasVisible = false;
-            editorInitializationStarted = false;
-            editorInitializationError = false;
-          },
-          class:
-            (!procyonPlugin && !optimizer.editorReady) || optimizer.options.viewMode !== "code"
-              ? "editor-hidden"
-              : "",
-        }),
-        !optimizer.editorReady && (!procyonPlugin || optimizer.options.viewMode === "code")
+        showCodeEditor ? m("div#editor", {
+          class: !optimizer.editorReady || optimizer.options.viewMode !== "code"
+            ? "editor-hidden"
+            : "",
+        }) : null,
+        showCodeEditor && !optimizer.editorReady
           ? m(
               "div",
               {
                 class: "editor-loading",
               },
-              editorInitializationError ? "Failed to initialize code editor." : "Initializing editor...",
+              "Initializing editor...",
             )
           : null,
-        optimizer.options.viewMode === "tree" ? m(TreeView) : null,
+        !showCodeEditor || optimizer.options.viewMode === "tree" ? m(TreeView) : null,
       ]),
     ]);
   },

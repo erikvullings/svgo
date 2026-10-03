@@ -390,7 +390,7 @@ function copyToClipboard(): void {
 export const App: m.Component = {
   oncreate() {
     document.body.classList.toggle("theme-procyon", Boolean(procyonPlugin));
-    if (!procyonPlugin) {
+    if (import.meta.env.MODE !== "procyon" && !procyonPlugin) {
       setTimeout(() => {
         optimizer.initializeEditor();
       }, 100);
@@ -468,8 +468,6 @@ export const App: m.Component = {
           showDownload,
           onCopy: procyonPlugin ? copyToClipboard : undefined,
           isCopied,
-          showViewModes: Boolean(procyonPlugin),
-          onViewModeChange: procyonPlugin ? () => { sidebarOpen = false; } : undefined,
         }),
         m(".app-main", [
           m(Header, {
@@ -498,11 +496,7 @@ export const App: m.Component = {
               onupdate: setupSplitter,
             },
             [
-              m(".editor-panel#left-panel", [
-                m(EditorPanel, {
-                  sourceSvg,
-                }),
-              ]),
+              m(".editor-panel#left-panel", [m(EditorPanel)]),
               m("div#dragbar.dragbar"),
               m<import("./components/previewPanel").PreviewPanelAttrs, {}>(
                 PreviewPanel,
