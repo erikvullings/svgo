@@ -56,7 +56,8 @@ defaults.
 The Procyon Code and Tree views retain a small vertical inset; Code uses a
 compact line-number gutter and no Monaco focus outline. The sidebar closes
 without a width animation so Monaco's layout and pointer coordinates remain
-stable when switching views.
+stable when switching views. Monaco is initialized only after Code becomes
+visible, avoiding a zero-sized editor measurement during Tree-first startup.
 
 Before loading the app, the isolated host injects
 `window.procyonPlugin = { loadToken, theme, settings, postMessage }`. `loadToken` is an

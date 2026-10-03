@@ -257,4 +257,26 @@ describe("host-specific starting layout", () => {
     m.render(root, m(App));
     expect(layout).toHaveBeenCalledTimes(2);
   });
+
+  it("does not initialize Monaco in the hidden Procyon Tree view", async () => {
+    vi.useFakeTimers();
+    window.procyonPlugin = { loadToken: "deferred-editor", postMessage: vi.fn() };
+    vi.resetModules();
+    const { optimizer } = await import("../src/optimizer");
+    const { App } = await import("../src/ui");
+    const initializeEditor = vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    document.body.append(root);
+    m.render(root, m(App));
+    vi.runOnlyPendingTimers();
+    expect(initializeEditor).not.toHaveBeenCalled();
+
+    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
+    m.render(root, m(App));
+    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
+    m.render(root, m(App));
+    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(false);
+    expect(initializeEditor).toHaveBeenCalledOnce();
+    m.render(root, m(App));
+    expect(initializeEditor).toHaveBeenCalledOnce();
+  });
 });

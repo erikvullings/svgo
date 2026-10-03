@@ -390,9 +390,11 @@ function copyToClipboard(): void {
 export const App: m.Component = {
   oncreate() {
     document.body.classList.toggle("theme-procyon", Boolean(procyonPlugin));
-    setTimeout(() => {
-      optimizer.initializeEditor();
-    }, 100);
+    if (!procyonPlugin) {
+      setTimeout(() => {
+        optimizer.initializeEditor();
+      }, 100);
+    }
 
     applyTheme(theme);
 

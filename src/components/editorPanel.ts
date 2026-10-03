@@ -8,9 +8,20 @@ export type EditorPanelAttrs = {
 };
 
 let editorWasVisible = false;
+let editorInitializationStarted = false;
+let editorInitializationError = false;
 
 function layoutVisibleEditor(): void {
-  const visible = optimizer.editorReady && optimizer.options.viewMode === "code";
+  const codeVisible = optimizer.options.viewMode === "code";
+  if (procyonPlugin && codeVisible && !optimizer.editorReady && !editorInitializationStarted) {
+    editorInitializationStarted = true;
+    void optimizer.initializeEditor().catch((error: unknown) => {
+      editorInitializationError = true;
+      console.error("Failed to initialize SVG code editor:", error);
+      m.redraw();
+    });
+  }
+  const visible = optimizer.editorReady && codeVisible;
   if (procyonPlugin && visible && !editorWasVisible) {
     optimizer.editor?.layout();
   }
@@ -53,19 +64,23 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
         m("div#editor", {
           oncreate: layoutVisibleEditor,
           onupdate: layoutVisibleEditor,
-          onremove: () => { editorWasVisible = false; },
+          onremove: () => {
+            editorWasVisible = false;
+            editorInitializationStarted = false;
+            editorInitializationError = false;
+          },
           class:
-            !optimizer.editorReady || optimizer.options.viewMode !== "code"
+            (!procyonPlugin && !optimizer.editorReady) || optimizer.options.viewMode !== "code"
               ? "editor-hidden"
               : "",
         }),
-        !optimizer.editorReady
+        !optimizer.editorReady && (!procyonPlugin || optimizer.options.viewMode === "code")
           ? m(
               "div",
               {
                 class: "editor-loading",
               },
-              "Initializing editor...",
+              editorInitializationError ? "Failed to initialize code editor." : "Initializing editor...",
             )
           : null,
         optimizer.options.viewMode === "tree" ? m(TreeView) : null,
