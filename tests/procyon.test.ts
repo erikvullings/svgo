@@ -3,6 +3,7 @@ import m from "mithril";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { SVGOptimizer } from "../src/optimizer";
 import { Sidebar } from "../src/components/sidebar";
+import { Header } from "../src/components/header";
 
 describe("Procyon host adapter", () => {
   const postMessage = vi.fn();
@@ -53,10 +54,11 @@ describe("Procyon host adapter", () => {
     expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: "save-svg", svg });
   });
 
-  it("shows Save only when offered by the host and wires the action", async () => {
+  it("places Save in the header and Copy in the menu only with the host", async () => {
     const { canSaveProcyonSvg, handleProcyonMessage, saveProcyonSvg } = await import("../src/procyon");
     const optimizer = new SVGOptimizer();
-    const attrs = {
+    const copy = vi.fn();
+    const sidebarAttrs = {
       optimizer,
       sourceSvg: svg,
       theme: "dark" as const,
@@ -64,26 +66,49 @@ describe("Procyon host adapter", () => {
       open: true,
       showFileActions: false,
       showDownload: false,
+      onCopy: copy,
+      isCopied: false,
+    };
+    const headerAttrs = {
+      stats: { originalSizeLabel: "0 B", optimizedSizeLabel: "0 B", reductionLabel: "0 B", reductionClass: "" },
+      showTitle: false,
+      onToggleSidebar: () => {},
+      canOptimize: false,
+      onOptimize: () => {},
+      canCopy: true,
+      isCopied: false,
+      onCopy: copy,
       onSave: () => saveProcyonSvg(optimizer),
       canSave: canSaveProcyonSvg(optimizer),
     };
-    m.render(document.body, m(Sidebar, attrs));
+    m.render(document.body, [m(Sidebar, sidebarAttrs), m(Header, headerAttrs)]);
     expect(document.querySelector('button[title="Download optimized SVG"]')).toBeNull();
+    expect(document.querySelector(".sidebar [title='Save SVG to Procyon']")).toBeNull();
+    expect(document.querySelector(".header [title='Copy source SVG to clipboard']")).toBeNull();
+    document.querySelector<HTMLButtonElement>(".sidebar [title='Copy source SVG to clipboard']")?.click();
+    expect(copy).toHaveBeenCalledOnce();
     let save = document.querySelector<HTMLButtonElement>('button[title="Save SVG to Procyon"]');
     expect(save?.disabled).toBe(true);
     handleProcyonMessage(new MessageEvent("message", {
       data: { type: "load-svg", svg, uri: "file:///image.svg", loadToken: "test-window-token" },
       source: window,
     }), optimizer);
-    m.render(document.body, m(Sidebar, { ...attrs, canSave: canSaveProcyonSvg(optimizer) }));
+    m.render(document.body, [
+      m(Sidebar, sidebarAttrs),
+      m(Header, { ...headerAttrs, canSave: canSaveProcyonSvg(optimizer) }),
+    ]);
     save = document.querySelector<HTMLButtonElement>('button[title="Save SVG to Procyon"]');
     expect(save?.disabled).toBe(false);
     save?.click();
     expect(postMessage).toHaveBeenCalledExactlyOnceWith({ type: "save-svg", svg });
 
-    m.render(document.body, m(Sidebar, { ...attrs, onSave: undefined, showDownload: true }));
+    m.render(document.body, [
+      m(Sidebar, { ...sidebarAttrs, onCopy: undefined, showDownload: true }),
+      m(Header, { ...headerAttrs, onSave: undefined, showTitle: true }),
+    ]);
     expect(document.querySelector('button[title="Save SVG to Procyon"]')).toBeNull();
     expect(document.querySelector('button[title="Download optimized SVG"]')).not.toBeNull();
+    expect(document.querySelector(".header [title='Copy source SVG to clipboard']")).not.toBeNull();
   });
 
   it("handles Cmd/Ctrl+S even while the code editor or an input is focused", async () => {
@@ -157,6 +182,44 @@ describe("Procyon host adapter", () => {
     expect(result({ type: "save-result", success: true, loadToken: "test-window-token" })).toEqual({
       type: "save-result", success: true,
     });
+    expect(result({ type: "theme-change", theme: "light", loadToken: "test-window-token" }, null)).toBeNull();
+    expect(result({ type: "theme-change", theme: "light", loadToken: "wrong" })).toBeNull();
+    expect(result({ type: "theme-change", theme: "auto", loadToken: "test-window-token" })).toBeNull();
+    expect(result({ type: "theme-change", theme: "light", loadToken: "test-window-token" })).toEqual({
+      type: "theme-change", theme: "light",
+    });
+  });
+
+  it("follows trusted host theme changes without saving a local Procyon theme", async () => {
+    vi.useFakeTimers();
+    window.procyonPlugin!.theme = "dark";
+    localStorage.setItem("svgo-theme", "light");
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    const { optimizer } = await import("../src/optimizer");
+    vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    const root = document.createElement("div");
+    document.body.append(root);
+    try {
+      m.render(root, m(App));
+      initializeGlobalHandlers();
+      expect(document.body.classList.contains("theme-light")).toBe(false);
+      expect(root.querySelector('[title="Toggle theme"]')).toBeNull();
+      const send = (theme: string, loadToken: string, source: MessageEventSource | null = window) =>
+        window.dispatchEvent(new MessageEvent("message", {
+          data: { type: "theme-change", theme, loadToken }, source,
+        }));
+      send("light", "wrong");
+      send("light", "test-window-token", null);
+      expect(document.body.classList.contains("theme-light")).toBe(false);
+      send("light", "test-window-token");
+      expect(document.body.classList.contains("theme-light")).toBe(true);
+      expect(localStorage.getItem("svgo-theme")).toBe("light");
+      send("dark", "test-window-token");
+      expect(document.body.classList.contains("theme-light")).toBe(false);
+    } finally {
+      m.render(root, null);
+      root.remove();
+    }
   });
 
   it("keeps failed saves visible until retry or a new load", async () => {

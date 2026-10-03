@@ -73,6 +73,7 @@ const PRESERVE_ATTR_PREFIXES = ["data-", "aria-"];
 const BLOCKED_ATTR_PREFIXES = ["inkscape:", "sodipodi:"];
 const RESERVED_ATTR_NAME = "data-cx-id";
 const PERSISTED_STATE_KEY = "svgo-state-v1";
+const PROCYON_SETTINGS_KEY = "svgo-procyon-settings-v1";
 
 class SVGOptimizer {
   originalSvg: string;
@@ -148,7 +149,6 @@ class SVGOptimizer {
   }
 
   canUseLocalStorage(): boolean {
-    if (typeof window !== "undefined" && window.procyonPlugin) return false;
     if (typeof window === "undefined" || typeof localStorage === "undefined") {
       return false;
     }
@@ -276,6 +276,18 @@ class SVGOptimizer {
     if (!this.persistenceEnabled) return;
 
     try {
+      if (procyonPlugin) {
+        const raw = localStorage.getItem(PROCYON_SETTINGS_KEY);
+        if (!raw) return;
+        const parsed: unknown = JSON.parse(raw);
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          throw new Error("Invalid Procyon settings");
+        }
+        this.applyPersistedOptions(parsed as Partial<PersistedOptions>);
+        this.options.viewMode = "tree";
+        return;
+      }
+
       const raw = localStorage.getItem(PERSISTED_STATE_KEY);
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<PersistedState>;
@@ -298,6 +310,12 @@ class SVGOptimizer {
     if (!this.persistenceEnabled) return;
 
     try {
+      if (procyonPlugin) {
+        const { viewMode: _viewMode, ...settings } = this.getPersistedOptions();
+        localStorage.setItem(PROCYON_SETTINGS_KEY, JSON.stringify(settings));
+        return;
+      }
+
       const state: PersistedState = {
         sourceSvg: this.getSourceSvg() || "",
         options: this.getPersistedOptions(),

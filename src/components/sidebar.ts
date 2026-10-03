@@ -1,17 +1,18 @@
 import m from "mithril";
 import { SVGOptimizer } from "../optimizer";
 import { Controls } from "./controls";
+import { iconCopy } from "./actionIcons";
 
 export type SidebarAttrs = {
   optimizer: SVGOptimizer;
   sourceSvg: string;
   theme: "dark" | "light" | "auto";
-  onToggleTheme: () => void;
+  onToggleTheme?: () => void;
   open: boolean;
   showFileActions: boolean;
   showDownload: boolean;
-  onSave?: () => void;
-  canSave?: boolean;
+  onCopy?: () => void;
+  isCopied?: boolean;
 };
 
 export const Sidebar: m.Component<SidebarAttrs> = {
@@ -24,8 +25,8 @@ export const Sidebar: m.Component<SidebarAttrs> = {
       open,
       showFileActions,
       showDownload,
-      onSave,
-      canSave,
+      onCopy,
+      isCopied,
     } = attrs;
 
     const hasSource = sourceSvg && sourceSvg.trim().length > 0;
@@ -69,15 +70,15 @@ export const Sidebar: m.Component<SidebarAttrs> = {
                   [iconDownload(), m("span", "Download")],
                 )
               : null,
-            onSave
+            onCopy
               ? m(
                   "button.action-button",
                   {
-                    title: "Save SVG to Procyon",
-                    onclick: onSave,
-                    disabled: canSave ? undefined : "disabled",
+                    title: "Copy source SVG to clipboard",
+                    onclick: onCopy,
+                    disabled: hasSource ? undefined : "disabled",
                   },
-                  [iconSave(), m("span", "Save")],
+                  [iconCopy(), m("span", isCopied ? "Copied!" : "Copy")],
                 )
               : null,
             m(
@@ -134,24 +135,26 @@ export const Sidebar: m.Component<SidebarAttrs> = {
           ]),
         ]),
         m(".sidebar-section.options", [m(Controls, { optimizer })]),
-        m(".sidebar-footer", [
-          m(".section-title", "Theme"),
-          m(
-            "button.action-button",
-            { onclick: onToggleTheme, title: "Toggle theme" },
-            [
-              iconTheme(),
+        onToggleTheme
+          ? m(".sidebar-footer", [
+              m(".section-title", "Theme"),
               m(
-                "span",
-                theme === "dark"
-                  ? "Light"
-                  : theme === "light"
-                    ? "Auto"
-                    : "Dark",
+                "button.action-button",
+                { onclick: onToggleTheme, title: "Toggle theme" },
+                [
+                  iconTheme(),
+                  m(
+                    "span",
+                    theme === "dark"
+                      ? "Light"
+                      : theme === "light"
+                        ? "Auto"
+                        : "Dark",
+                  ),
+                ],
               ),
-            ],
-          ),
-        ]),
+            ])
+          : null,
       ]),
     );
   },
@@ -174,17 +177,6 @@ function iconDownload(): m.Vnode {
       m("path[d=M12 3v10]"),
       m("path[d=M8 9l4 4 4-4]"),
       m("path[d=M4 17h16v4H4z]"),
-    ],
-  );
-}
-
-function iconSave(): m.Vnode {
-  return m(
-    "svg.icon[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=1.8]",
-    [
-      m("path[d=M4 3h13l3 3v15H4z]"),
-      m("path[d=M8 3v7h8V3]"),
-      m("path[d=M7 21v-8h10v8]"),
     ],
   );
 }

@@ -48,14 +48,15 @@ unlike the standalone and VS Code builds, which retain their existing CDN setup.
 Package the complete directory; it does not need network access for the editor.
 When hosted by Procyon, the app starts in Tree mode with the sidebar closed,
 shows the tree/editor and SVG preview side-by-side at equal width, hides the
-standalone Open action and app title, and retains explicit Save. Standalone
-and VS Code keep their existing defaults.
+standalone Open action and app title, and places Save in the header and Copy
+in the sidebar menu. Standalone and VS Code keep their existing defaults.
 
 Before loading the app, the isolated host injects
-`window.procyonPlugin = { loadToken, postMessage }`. `loadToken` is an
+`window.procyonPlugin = { loadToken, theme, postMessage }`. `loadToken` is an
 unpredictable, nonempty string unique to each plugin window; `postMessage`
-accepts `{ type: "save-svg", svg: string }`. After the window loads, the host
-delivers `{ type: "load-svg", svg: string, uri: string, loadToken }` via
+accepts `{ type: "save-svg", svg: string }`; `theme` is the effective Procyon
+`"light"` or `"dark"` theme. After the window loads, the host delivers
+`{ type: "load-svg", svg: string, uri: string, loadToken }` via
 `window.postMessage` executed **inside that window**. The app accepts loads
 only from the same window with the matching token. The host owns the URI and
 must save the `svg` from an explicit Save button or Cmd/Ctrl+S to that document.
@@ -65,7 +66,17 @@ After each save attempt, the host reports
 `{ type: "save-result", success: boolean, error?: string, loadToken }` through
 the same in-window `postMessage` path. A failed save displays the host's error
 (or a generic failure) until the next save or document load.
-Procyon state is not restored from local storage.
+Procyon stores optimization settings (general/path precision, cleanup toggles,
+grouping options, autocrop, and custom size) under `svgo-procyon-settings-v1`.
+The host sends `{ type: "theme-change", theme, loadToken }` through the same
+in-window message path when Procyon's effective theme changes. Without a host
+theme, the plugin follows the system color scheme; SVGO uses its own light/dark
+palette rather than Procyon's exact CSS colors. Procyon does not read or store
+SVGO's standalone theme preference, SVG content, document URIs, history, or
+view mode. Every new panel starts in Tree mode with the sidebar closed and an
+equal horizontal split. Changes to the sidebar and split remain session-local
+even if previous layout values exist in storage. Standalone storage at
+`svgo-state-v1` is not read in Procyon.
 The preview and live SVG bounds measurement sanitize loaded markup before
 inserting it into the DOM. Scripts, event handlers, foreignObject, external
 references, and unsafe styles are removed from the rendered copy; the editable

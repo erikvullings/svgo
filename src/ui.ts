@@ -46,6 +46,11 @@ function clampSplitterPercent(percent: number): number {
 }
 
 function readTheme(): "dark" | "light" | "auto" {
+  if (procyonPlugin) {
+    return procyonPlugin.theme === "dark" || procyonPlugin.theme === "light"
+      ? procyonPlugin.theme
+      : "auto";
+  }
   const stored = getStoredValue(STORAGE_THEME_KEY);
   if (stored === "dark" || stored === "light" || stored === "auto") {
     return stored;
@@ -192,7 +197,7 @@ function applyTheme(nextTheme: "dark" | "light" | "auto") {
   theme = nextTheme;
   const resolved = resolveTheme(theme);
   document.body.classList.toggle("theme-light", resolved === "light");
-  setStoredValue(STORAGE_THEME_KEY, theme);
+  if (!procyonPlugin) setStoredValue(STORAGE_THEME_KEY, theme);
   optimizer.setEditorTheme(resolved);
 }
 
@@ -203,7 +208,7 @@ function toggleTheme() {
 
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
-  setStoredValue(STORAGE_SIDEBAR_KEY, String(sidebarOpen));
+  if (!procyonPlugin) setStoredValue(STORAGE_SIDEBAR_KEY, String(sidebarOpen));
 }
 
 function applySplitterLayout(
@@ -277,7 +282,7 @@ function setupSplitter(): void {
     document.onmouseup = function () {
       document.onmousemove = null;
       document.onmouseup = null;
-      setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
+      if (!procyonPlugin) setStoredValue(STORAGE_SPLITTER_KEY, String(splitterPercent));
     };
   };
 }
@@ -285,7 +290,7 @@ function setupSplitter(): void {
 function toggleSplitterOrientation(): void {
   splitterOrientation =
     splitterOrientation === "vertical" ? "horizontal" : "vertical";
-  setStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY, splitterOrientation);
+  if (!procyonPlugin) setStoredValue(STORAGE_SPLITTER_ORIENTATION_KEY, splitterOrientation);
   setupSplitter();
 }
 
@@ -453,12 +458,12 @@ export const App: m.Component = {
           optimizer,
           sourceSvg,
           theme,
-          onToggleTheme: toggleTheme,
+          onToggleTheme: procyonPlugin ? undefined : toggleTheme,
           open: sidebarOpen,
           showFileActions,
           showDownload,
-          onSave: procyonPlugin ? requestProcyonSave : undefined,
-          canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
+          onCopy: procyonPlugin ? copyToClipboard : undefined,
+          isCopied,
         }),
         m(".app-main", [
           m(Header, {
@@ -470,6 +475,8 @@ export const App: m.Component = {
             canCopy: hasSource,
             isCopied,
             onCopy: copyToClipboard,
+            onSave: procyonPlugin ? requestProcyonSave : undefined,
+            canSave: procyonPlugin ? canSaveProcyonSvg(optimizer) : false,
           }),
           m(
             ".main-content",
@@ -536,6 +543,8 @@ export function initializeGlobalHandlers() {
       if (!message) return;
       if (message.type === "load-svg") {
         setSaveStatus(null);
+      } else if (message.type === "theme-change") {
+        applyTheme(message.theme);
       } else {
         setSaveStatus(message.success
           ? { kind: "success", message: "SVG saved." }
