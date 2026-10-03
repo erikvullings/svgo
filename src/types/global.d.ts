@@ -8,6 +8,7 @@ type MonacoEditorInstance = {
   getValue: () => string;
   setValue: (value: string) => void;
   onDidChangeModelContent: (listener: () => void) => void;
+  layout: () => void;
 };
 
 type MonacoLanguageConfig = {

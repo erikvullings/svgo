@@ -466,6 +466,8 @@ export const App: m.Component = {
           showDownload,
           onCopy: procyonPlugin ? copyToClipboard : undefined,
           isCopied,
+          showViewModes: Boolean(procyonPlugin),
+          onViewModeChange: procyonPlugin ? () => { sidebarOpen = false; } : undefined,
         }),
         m(".app-main", [
           m(Header, {

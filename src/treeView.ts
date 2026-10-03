@@ -1,6 +1,7 @@
 import m from "mithril";
 import type { Vnode, VnodeDOM } from "mithril";
 import { optimizer } from "./optimizer";
+import { procyonPlugin } from "./procyon";
 import {
   canContainSvgElements,
   ELEMENT_TEMPLATES,
@@ -43,6 +44,8 @@ type TreeNodeAttrs = {
 type EditingField = "name" | "value";
 type DropPlacement = "before" | "inside" | "after";
 
+let propertiesOpen = !procyonPlugin;
+
 export const TreeView: m.Component = {
   view() {
     if (!optimizer.getSourceSvg()) return m(".tree-view", "No SVG loaded");
@@ -69,7 +72,7 @@ export const TreeView: m.Component = {
       : "0";
 
     return m(".tree-view", [
-      m(".tree-layout", [
+      m(".tree-layout", { class: procyonPlugin && !propertiesOpen ? "inspector-collapsed" : "" }, [
         m(".tree-content", [
           m(TreeNode, {
             node: svg,
@@ -79,12 +82,22 @@ export const TreeView: m.Component = {
             isLast: true,
           }),
         ]),
-        renderPropertiesInspector(
+        procyonPlugin ? m(".inspector-rail", [
+          m("button.inspector-toggle", {
+            title: propertiesOpen ? "Hide properties" : "Show properties",
+            "aria-label": propertiesOpen ? "Hide properties" : "Show properties",
+            "aria-expanded": String(propertiesOpen),
+            onclick: () => { propertiesOpen = !propertiesOpen; },
+          }, m("svg[viewBox=0 0 24 24][fill=none][stroke=currentColor][stroke-width=2][aria-hidden=true]", [
+            m("path", { d: propertiesOpen ? "m14 5-7 7 7 7" : "m10 5 7 7-7 7" }),
+          ])),
+        ]) : null,
+        propertiesOpen ? renderPropertiesInspector(
           selectedElement,
           svg,
           inspectorPath,
           selectedTextNode,
-        ),
+        ) : null,
       ]),
     ]);
   },

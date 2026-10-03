@@ -13,6 +13,8 @@ export type SidebarAttrs = {
   showDownload: boolean;
   onCopy?: () => void;
   isCopied?: boolean;
+  showViewModes?: boolean;
+  onViewModeChange?: () => void;
 };
 
 export const Sidebar: m.Component<SidebarAttrs> = {
@@ -27,6 +29,8 @@ export const Sidebar: m.Component<SidebarAttrs> = {
       showDownload,
       onCopy,
       isCopied,
+      showViewModes,
+      onViewModeChange,
     } = attrs;
 
     const hasSource = sourceSvg && sourceSvg.trim().length > 0;
@@ -134,6 +138,20 @@ export const Sidebar: m.Component<SidebarAttrs> = {
             ),
           ]),
         ]),
+        showViewModes ? m(".sidebar-section", [
+          m(".section-title", "View"),
+          m(".action-grid", (["tree", "code"] as const).map((mode) =>
+            m("button.action-button.view-mode-button", {
+              title: `${mode === "tree" ? "Tree" : "Code"} view`,
+              "aria-pressed": String(optimizer.options.viewMode === mode),
+              onclick: () => {
+                optimizer.options.viewMode = mode;
+                optimizer.persistSessionState();
+                onViewModeChange?.();
+              },
+            }, mode === "tree" ? "Tree" : "Code"),
+          )),
+        ]) : null,
         m(".sidebar-section.options", [m(Controls, { optimizer })]),
         onToggleTheme
           ? m(".sidebar-footer", [

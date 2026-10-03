@@ -1,17 +1,28 @@
 import m from "mithril";
 import { optimizer } from "../optimizer";
+import { procyonPlugin } from "../procyon";
 import { TreeView } from "../treeView";
 
 export type EditorPanelAttrs = {
   sourceSvg: string;
 };
 
+let editorWasVisible = false;
+
+function layoutVisibleEditor(): void {
+  const visible = optimizer.editorReady && optimizer.options.viewMode === "code";
+  if (procyonPlugin && visible && !editorWasVisible) {
+    optimizer.editor?.layout();
+  }
+  editorWasVisible = visible;
+}
+
 export const EditorPanel: m.Component<EditorPanelAttrs> = {
   view({ attrs }) {
     const { sourceSvg } = attrs;
 
     return m(".editor-panel", [
-      m(".panel-header", [
+      !procyonPlugin ? m(".panel-header", [
         m("span", "Source SVG"),
         m("div.editor-actions", [
           m(
@@ -37,9 +48,12 @@ export const EditorPanel: m.Component<EditorPanelAttrs> = {
             [iconTree(), m("span", "Tree")],
           ),
         ]),
-      ]),
+      ]) : null,
       m(".editor-container", [
         m("div#editor", {
+          oncreate: layoutVisibleEditor,
+          onupdate: layoutVisibleEditor,
+          onremove: () => { editorWasVisible = false; },
           class:
             !optimizer.editorReady || optimizer.options.viewMode !== "code"
               ? "editor-hidden"

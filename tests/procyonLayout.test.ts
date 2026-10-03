@@ -28,12 +28,18 @@ describe("host-specific starting layout", () => {
       width: 1000, height: 800, left: 0, top: 0,
     } as DOMRect);
 
+    optimizer.loadSvgString('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10"/></svg>');
     document.body.append(root);
     m.render(root, m(App));
 
     expect(document.body.classList.contains("theme-procyon")).toBe(true);
     expect(optimizer.options.viewMode).toBe("tree");
     expect(root.querySelector(".tree-view")).not.toBeNull();
+    expect(root.querySelector(".editor-panel .panel-header")).toBeNull();
+    expect(root.querySelector(".tree-layout.inspector-collapsed")).not.toBeNull();
+    expect(root.querySelector(".properties-inspector")).toBeNull();
+    const propertiesToggle = root.querySelector<HTMLButtonElement>(".inspector-toggle");
+    expect(propertiesToggle?.getAttribute("aria-expanded")).toBe("false");
     expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
     expect(root.querySelector(".main-content")?.classList.contains("is-vertical")).toBe(true);
     expect(root.querySelector(".main-content")?.firstElementChild?.id).toBe("left-panel");
@@ -48,9 +54,19 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector(".action-button.file-button")).toBeNull();
     expect(root.querySelector("#file-input")).toBeNull();
 
+    propertiesToggle?.click();
+    m.render(root, m(App));
+    expect(root.querySelector(".properties-inspector")).not.toBeNull();
+    expect(root.querySelector('[title="Hide properties"]')?.getAttribute("aria-expanded")).toBe("true");
+    root.querySelector<HTMLButtonElement>('[title="Hide properties"]')?.click();
+    m.render(root, m(App));
+    expect(root.querySelector(".tree-layout.inspector-collapsed")).not.toBeNull();
+
     root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
     m.render(root, m(App));
     expect(root.querySelector(".sidebar")?.classList.contains("open")).toBe(true);
+    expect(root.querySelector(".sidebar [title='Tree view']")?.getAttribute("aria-pressed")).toBe("true");
+    expect(root.querySelector(".sidebar [title='Code view']")?.getAttribute("aria-pressed")).toBe("false");
     expect(root.querySelector(".action-button.file-button")).toBeNull();
     expect(root.querySelector(".sidebar [title='Copy source SVG to clipboard']")).not.toBeNull();
     expect(root.querySelector(".sidebar [title='Save SVG to Procyon']")).toBeNull();
@@ -75,6 +91,7 @@ describe("host-specific starting layout", () => {
       width: 1000, height: 800, left: 0, top: 0,
     } as DOMRect);
 
+    optimizer.loadSvgString('<svg xmlns="http://www.w3.org/2000/svg"><rect width="10"/></svg>');
     document.body.append(root);
     m.render(root, m(App));
 
@@ -83,6 +100,11 @@ describe("host-specific starting layout", () => {
     expect(root.querySelector(".sidebar")?.classList.contains("open")).toBe(true);
     expect(root.querySelector(".main-content")?.classList.contains("is-vertical")).toBe(true);
     expect(root.querySelector(".header .title")?.textContent).toContain("Advanced SVG Optimizer");
+    expect(root.querySelector(".editor-panel .panel-header")?.textContent).toContain("Source SVG");
+    root.querySelectorAll<HTMLButtonElement>(".editor-actions .view-toggle")[1]?.click();
+    m.render(root, m(App));
+    expect(root.querySelector(".properties-inspector")).not.toBeNull();
+    expect(root.querySelector(".inspector-toggle")).toBeNull();
     expect(root.querySelector(".header [title='Copy source SVG to clipboard']")).not.toBeNull();
     expect(root.querySelector(".action-button.file-button")).not.toBeNull();
     expect(root.querySelector('[title="Download optimized SVG"]')).not.toBeNull();
@@ -197,5 +219,42 @@ describe("host-specific starting layout", () => {
     expect(reopened.getSourceSvg()).toBe(svg);
     expect(reopened.options.precision).toBe(4);
     expect(reopened.options.viewMode).toBe("tree");
+  });
+
+  it("lays out Monaco after switching a hosted document from Tree to Code", async () => {
+    vi.useFakeTimers();
+    window.procyonPlugin = { loadToken: "code-layout", postMessage: vi.fn() };
+    vi.resetModules();
+    const { optimizer } = await import("../src/optimizer");
+    const { App } = await import("../src/ui");
+    vi.spyOn(optimizer, "initializeEditor").mockResolvedValue();
+    const layout = vi.fn();
+    optimizer.editor = {
+      getValue: () => '<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>',
+      setValue: vi.fn(),
+      onDidChangeModelContent: vi.fn(),
+      layout,
+    };
+    optimizer.editorReady = true;
+    document.body.append(root);
+    m.render(root, m(App));
+    expect(layout).not.toHaveBeenCalled();
+    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
+    m.render(root, m(App));
+    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
+    m.render(root, m(App));
+    expect(root.querySelector(".sidebar")?.classList.contains("collapsed")).toBe(true);
+    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(false);
+    expect(layout).toHaveBeenCalledOnce();
+    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
+    m.render(root, m(App));
+    root.querySelector<HTMLButtonElement>('[title="Tree view"]')?.click();
+    m.render(root, m(App));
+    expect(root.querySelector("#editor")?.classList.contains("editor-hidden")).toBe(true);
+    root.querySelector<HTMLButtonElement>(".menu-toggle")?.click();
+    m.render(root, m(App));
+    root.querySelector<HTMLButtonElement>('[title="Code view"]')?.click();
+    m.render(root, m(App));
+    expect(layout).toHaveBeenCalledTimes(2);
   });
 });
