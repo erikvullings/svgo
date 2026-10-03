@@ -297,7 +297,7 @@ describe("host-specific starting layout", () => {
 
   it("keeps preview background choices outside the SVG and Save payload", async () => {
     const postMessage = vi.fn();
-    window.procyonPlugin = { loadToken: "background-test", postMessage };
+    window.procyonPlugin = { loadToken: "background-test", theme: "light", postMessage };
     vi.resetModules();
     const { optimizer } = await import("../src/optimizer");
     const { App, initializeGlobalHandlers } = await import("../src/ui");
@@ -315,12 +315,12 @@ describe("host-specific starting layout", () => {
     const picker = root.querySelector<HTMLSelectElement>(".preview-background-control select");
     expect(picker?.labels?.[0]?.textContent).toContain("Background");
     expect(Array.from(picker?.options ?? [], (option) => option.value)).toEqual([
-      "white", "black", "checkerboard",
+      "light", "dark", "checkerboard",
     ]);
-    expect(container.dataset.previewBackground).toBe("white");
+    expect(container.dataset.previewBackground).toBe("light");
     const source = optimizer.getSourceSvg();
     const preview = optimizer.getPreviewSvg();
-    for (const background of ["black", "checkerboard", "white"]) {
+    for (const background of ["dark", "checkerboard", "light"]) {
       picker!.value = background;
       picker!.dispatchEvent(new Event("change", { bubbles: true }));
       m.render(root, m(App));
@@ -331,5 +331,49 @@ describe("host-specific starting layout", () => {
     }
     root.querySelector<HTMLButtonElement>('[title="Save SVG to Procyon"]')?.click();
     expect(postMessage).toHaveBeenCalledWith({ type: "save-svg", svg: source });
+  });
+
+  it("follows Procyon theme until the backdrop is explicitly chosen", async () => {
+    window.procyonPlugin = { loadToken: "theme-background", theme: "dark", postMessage: vi.fn() };
+    vi.resetModules();
+    const { optimizer } = await import("../src/optimizer");
+    const { App, initializeGlobalHandlers } = await import("../src/ui");
+    optimizer.loadSvgString('<svg xmlns="http://www.w3.org/2000/svg"><circle r="5"/></svg>');
+    document.body.append(root);
+    m.render(root, m(App));
+    initializeGlobalHandlers();
+    const container = root.querySelector<HTMLElement>(".preview-container")!;
+    const picker = root.querySelector<HTMLSelectElement>(".preview-background-control select")!;
+    const changeTheme = (theme: "dark" | "light") => {
+      window.dispatchEvent(new MessageEvent("message", {
+        data: { type: "theme-change", theme, loadToken: "theme-background" },
+        source: window,
+      }));
+      m.render(root, m(App));
+    };
+    const selectBackground = (background: "light" | "dark" | "checkerboard") => {
+      picker.value = background;
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+      m.render(root, m(App));
+    };
+
+    expect(picker.value).toBe("dark");
+    expect(container.dataset.previewBackground).toBe("dark");
+    changeTheme("light");
+    expect(picker.value).toBe("light");
+    expect(container.dataset.previewBackground).toBe("light");
+    changeTheme("dark");
+    expect(container.dataset.previewBackground).toBe("dark");
+
+    selectBackground("dark");
+    changeTheme("light");
+    expect(picker.value).toBe("dark");
+    expect(container.dataset.previewBackground).toBe("dark");
+    selectBackground("checkerboard");
+    changeTheme("dark");
+    expect(container.dataset.previewBackground).toBe("checkerboard");
+    selectBackground("light");
+    changeTheme("dark");
+    expect(container.dataset.previewBackground).toBe("light");
   });
 });

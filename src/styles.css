@@ -681,12 +681,12 @@ body.theme-procyon .preview-container::-webkit-scrollbar {
   display: none;
 }
 
-body.theme-procyon .preview-container[data-preview-background="white"] {
-  background: #fff;
+body.theme-procyon .preview-container[data-preview-background="light"] {
+  background: #ffffff;
 }
 
-body.theme-procyon .preview-container[data-preview-background="black"] {
-  background: #000;
+body.theme-procyon .preview-container[data-preview-background="dark"] {
+  background: #252d38;
 }
 
 body.theme-procyon .preview-container[data-preview-background="checkerboard"] {

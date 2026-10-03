@@ -53,8 +53,11 @@ the sidebar menu contains optimization actions. Procyon hides the standalone
 Source SVG header, Open action, and app title, and places Save in the header
 and Copy in the sidebar menu. Standalone and VS Code keep their existing
 defaults. The Procyon Tree view retains a small vertical inset. The preview
-background selector switches between fixed white (default), black, and
-checkerboard viewport backdrops without changing the SVG or its Save payload.
+background selector switches between fixed Light (`#ffffff`), Dark (`#252d38`),
+and checkerboard viewport backdrops without changing the SVG or its Save
+payload. It defaults to Procyon's active light/dark theme and follows live
+theme changes until the user selects a background, which remains fixed for
+that panel even if the host theme changes.
 Preview scrollbars are hidden while oversized SVGs remain pannable.
 
 Before loading the app, the isolated host injects

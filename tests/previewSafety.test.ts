@@ -37,6 +37,7 @@ describe.each(["standalone", "Procyon"] as const)("%s SVG preview", (mode) => {
     document.body.append(root);
     m.render(root, m(PreviewPanel, {
       previewSvg: maliciousSvg,
+      theme: "dark",
       splitOrientation: "vertical",
       onToggleSplitOrientation: () => {},
       onZoomIn: () => {},
@@ -79,6 +80,7 @@ describe.each(["standalone", "Procyon"] as const)("%s SVG preview", (mode) => {
     document.body.append(root);
     m.render(root, m(PreviewPanel, {
       previewSvg: svg,
+      theme: "dark",
       splitOrientation: "vertical",
       onToggleSplitOrientation: () => {},
       onZoomIn: () => {},

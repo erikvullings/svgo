@@ -203,6 +203,7 @@ function applyTheme(nextTheme: "dark" | "light" | "auto") {
   document.body.classList.toggle("theme-light", resolved === "light");
   if (!procyonPlugin) setStoredValue(STORAGE_THEME_KEY, theme);
   optimizer.setEditorTheme(resolved);
+  if (procyonPlugin) m.redraw();
 }
 
 function toggleTheme() {
@@ -540,6 +541,7 @@ export const App: m.Component = {
                 PreviewPanel,
                 {
                   previewSvg,
+                  theme: resolveTheme(theme),
                   splitOrientation: splitterOrientation,
                   onToggleSplitOrientation: toggleSplitterOrientation,
                   onZoomIn: () => zoomSvg(1.2),

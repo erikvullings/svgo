@@ -2,11 +2,12 @@ import m from "mithril";
 import { procyonPlugin } from "../procyon";
 import { sanitizePreviewSvg } from "../svgPreview";
 
-type PreviewBackground = "white" | "black" | "checkerboard";
-let previewBackground: PreviewBackground = "white";
+type PreviewBackground = "light" | "dark" | "checkerboard";
+let previewBackground: PreviewBackground | null = null;
 
 export type PreviewPanelAttrs = {
   previewSvg: string;
+  theme: "light" | "dark";
   splitOrientation: "vertical" | "horizontal";
   onToggleSplitOrientation: () => void;
   onZoomIn: () => void;
@@ -41,12 +42,14 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
   view({ attrs }) {
     const {
       previewSvg,
+      theme,
       splitOrientation,
       onToggleSplitOrientation,
       onZoomIn,
       onZoomOut,
       onResetZoom,
     } = attrs;
+    const background = previewBackground ?? theme;
 
     return m(".preview-panel#right-panel", [
       m(".panel-header", [
@@ -57,16 +60,16 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
               ? m("label.preview-background-control", [
                   m("span", "Background"),
                   m("select", {
-                    value: previewBackground,
+                    value: background,
                     onchange: (event: Event) => {
                       const value = (event.target as HTMLSelectElement).value;
-                      if (value === "white" || value === "black" || value === "checkerboard") {
+                      if (value === "light" || value === "dark" || value === "checkerboard") {
                         previewBackground = value;
                       }
                     },
                   }, [
-                    m("option[value=white]", "White"),
-                    m("option[value=black]", "Black"),
+                    m("option[value=light]", "Light"),
+                    m("option[value=dark]", "Dark"),
                     m("option[value=checkerboard]", "Checkerboard"),
                   ]),
                 ])
@@ -88,7 +91,7 @@ export const PreviewPanel: m.Component<PreviewPanelAttrs> = {
           ]),
       ]),
       m(".preview-container", {
-        "data-preview-background": procyonPlugin ? previewBackground : undefined,
+        "data-preview-background": procyonPlugin ? background : undefined,
       }, [
         previewSvg
           ? m.trust(sanitizePreviewSvg(previewSvg))
